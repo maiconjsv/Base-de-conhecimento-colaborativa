@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Busca: {{ query }}{% endblock %}
+{% block content %}
+<h1 class="h4">Busca</h1>
+
+<form class="input-group mb-4" action="{{ url_for('documents.search') }}" method="get">
+  <input class="form-control" type="search" name="q" value="{{ query }}"
+         placeholder="Digite palavras-chave…" autofocus>
+  <button class="btn btn-primary" type="submit">Buscar</button>
+</form>
+
+{% if query %}
+  <p class="text-muted">{{ total }} resultado(s) para <strong>{{ query }}</strong></p>
+  {% for item in items %}
+    {% set doc = item.document %}
+    <div class="card mb-2"><div class="card-body">
+      <a class="h6 text-decoration-none" href="{{ url_for('documents.detail', doc_id=doc.id) }}">{{ doc.title }}</a>
+      <div class="small text-muted mb-1">
+        {{ doc.original_filename }} · {{ doc.uploaded_at.strftime('%d/%m/%Y') }}
+        {% for tag in doc.tag_list %}· <span class="badge text-bg-secondary">{{ tag }}</span>{% endfor %}
+      </div>
+      <p class="mb-1 search-snippet">{{ item.snippet | safe }}</p>
+      <a class="small" href="{{ url_for('documents.download', doc_id=doc.id) }}">Baixar arquivo</a>
+    </div></div>
+  {% else %}
+    <div class="alert alert-warning">Nada encontrado. Tente outras palavras.</div>
+  {% endfor %}
+
+  {% if pages > 1 %}
+    <nav><ul class="pagination">
+      {% for p in range(1, pages + 1) %}
+        <li class="page-item {{ 'active' if p == page else '' }}">
+          <a class="page-link" href="{{ url_for('documents.search', q=query, page=p) }}">{{ p }}</a>
+        </li>
+      {% endfor %}
+    </ul></nav>
+  {% endif %}
+{% endif %}
+{% endblock %}

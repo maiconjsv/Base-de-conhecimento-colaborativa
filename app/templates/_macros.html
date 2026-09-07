@@ -1,0 +1,28 @@
+{% macro field(f, rows=None) %}
+  <div class="mb-3">
+    {{ f.label(class="form-label") }}
+    {% if rows %}
+      {{ f(class="form-control" ~ (" is-invalid" if f.errors else ""), rows=rows) }}
+    {% else %}
+      {{ f(class="form-control" ~ (" is-invalid" if f.errors else "")) }}
+    {% endif %}
+    {% if f.description %}<div class="form-text">{{ f.description }}</div>{% endif %}
+    {% for error in f.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+  </div>
+{% endmacro %}
+
+{% macro doc_row(doc) %}
+  <div class="d-flex justify-content-between align-items-start border-bottom py-2">
+    <div>
+      <a class="fw-semibold text-decoration-none" href="{{ url_for('documents.detail', doc_id=doc.id) }}">{{ doc.title }}</a>
+      <div class="small text-muted">
+        {{ doc.original_filename }} · {{ doc.size_human }} ·
+        {{ doc.uploaded_at.strftime('%d/%m/%Y %H:%M') }}
+        {% if doc.images %}· 📷 {{ doc.images|length }}{% endif %}
+        {% if not doc.extraction_ok %}· <span class="text-warning">sem texto extraido</span>{% endif %}
+      </div>
+      {% for tag in doc.tag_list %}<span class="badge text-bg-secondary">{{ tag }}</span> {% endfor %}
+    </div>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('documents.download', doc_id=doc.id) }}">Baixar</a>
+  </div>
+{% endmacro %}

@@ -1,0 +1,116 @@
+.badge.text-bg-secondary { font-weight: 500; }
+
+.search-snippet mark {
+  background: #fff3cd;
+  padding: 0 .1rem;
+}
+
+.extracted-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 420px;
+  overflow-y: auto;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: .375rem;
+  padding: .75rem;
+  font-size: .85rem;
+  margin: 0;
+}
+
+main { max-width: 960px; }
+
+.dropzone {
+  display: block;
+  border: 2px dashed #adb5bd;
+  border-radius: .75rem;
+  background: #fff;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.dropzone:hover { border-color: #0d6efd; }
+.dropzone.is-dragover {
+  border-color: #0d6efd;
+  background: #e7f1ff;
+}
+.dropzone-icon { font-size: 2rem; line-height: 1; }
+
+.image-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: .75rem;
+}
+.image-thumb {
+  display: block;
+  border: 1px solid #dee2e6;
+  border-radius: .5rem;
+  overflow: hidden;
+  background: #f8f9fa;
+  text-decoration: none;
+  color: #6c757d;
+}
+.image-thumb img {
+  display: block;
+  width: 100%;
+  height: 130px;
+  object-fit: contain;
+  background: #fff;
+}
+.image-thumb span {
+  display: block;
+  padding: .25rem .4rem;
+  font-size: .72rem;
+  border-top: 1px solid #dee2e6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Visualizacao de documento no sistema */
+.doc-viewer {
+  width: 100%;
+  height: 75vh;
+  min-height: 420px;
+  border: 1px solid #dee2e6;
+  border-radius: .375rem;
+  background: #fff;
+}
+.doc-scroll { max-height: 70vh; overflow: auto; }
+.doc-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: .375rem;
+  padding: .75rem;
+  font-size: .85rem;
+  margin: 0;
+}
+.doc-render { line-height: 1.6; }
+.doc-render :first-child { margin-top: 0; }
+.doc-render :last-child { margin-bottom: 0; }
+.doc-render img { max-width: 100%; height: auto; }
+.doc-render pre {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: .375rem;
+  padding: .75rem;
+  overflow-x: auto;
+}
+.doc-render table { border-collapse: collapse; width: 100%; }
+.doc-render th, .doc-render td { border: 1px solid #dee2e6; padding: .3rem .5rem; }
+
+/* Overlay de envio */
+.upload-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, .9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  z-index: 1080;
+}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Configuração inicial{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card"><div class="card-body">
+      <h1 class="h4 mb-1">Configuração inicial</h1>
+      <p class="text-muted">
+        Esta é a primeira vez que a Base de Conhecimento roda nesta cópia.
+        Crie o usuário administrador para começar.
+      </p>
+      <form method="post">
+        {{ form.hidden_tag() }}
+        {{ field(form.username) }}
+        {{ field(form.password) }}
+        {{ field(form.confirm) }}
+        {{ form.submit(class="btn btn-primary w-100", value="Criar e entrar") }}
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

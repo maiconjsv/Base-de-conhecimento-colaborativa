@@ -1,0 +1,3 @@
+# Dependencias so para gerar o executavel Windows (nao vao para producao)
+-r requirements.txt
+pyinstaller==6.11.1

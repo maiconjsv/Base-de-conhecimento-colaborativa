@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}{{ doc.title }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="h4 mb-1">{{ doc.title }}</h1>
+    <div class="text-muted small">
+      {{ doc.original_filename }} · {{ doc.size_human }} ·
+      enviado em {{ doc.uploaded_at.strftime('%d/%m/%Y %H:%M') }}
+      {% if doc.uploader %} por {{ doc.uploader.username }}{% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('documents.raw', doc_id=doc.id) }}"
+       target="_blank" rel="noopener">Abrir em nova aba</a>
+    <a class="btn btn-primary" href="{{ url_for('documents.download', doc_id=doc.id) }}">Baixar</a>
+    <form method="post" action="{{ url_for('documents.delete', doc_id=doc.id) }}"
+          onsubmit="return confirm('Remover este documento definitivamente?')">
+      {{ delete_form.hidden_tag() }}
+      <button class="btn btn-outline-danger">Remover</button>
+    </form>
+  </div>
+</div>
+
+{% if doc.description %}<p>{{ doc.description }}</p>{% endif %}
+{% for tag in doc.tag_list %}<span class="badge text-bg-secondary">{{ tag }}</span> {% endfor %}
+
+{# ---------- Visualizacao no sistema (sem baixar) ---------- #}
+<div class="card mt-4"><div class="card-body">
+  <h2 class="h6">Visualização</h2>
+
+  {% if view.kind == 'pdf' %}
+    <iframe class="doc-viewer" src="{{ url_for('documents.raw', doc_id=doc.id) }}"
+            title="Visualização de {{ doc.title }}"></iframe>
+
+  {% elif view.kind == 'markdown' %}
+    <div class="doc-render">{{ view.html }}</div>
+
+  {% elif view.kind == 'csv' %}
+    <div class="table-responsive doc-scroll">
+      <table class="table table-sm table-bordered small mb-0">
+        {% for row in view.rows %}
+          {% if loop.first %}
+            <thead><tr>{% for cell in row %}<th>{{ cell }}</th>{% endfor %}</tr></thead><tbody>
+          {% else %}
+            <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+          {% endif %}
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if view.truncated %}<p class="text-muted small mt-2 mb-0">Mostrando as primeiras linhas.</p>{% endif %}
+
+  {% elif view.kind == 'text' %}
+    {% if view.text %}
+      <pre class="doc-text doc-scroll">{{ view.text }}</pre>
+    {% else %}
+      <p class="text-muted mb-0">Arquivo de texto vazio.</p>
+    {% endif %}
+
+  {% else %}
+    {# office (docx/xlsx/pptx): previa do texto extraido #}
+    {% if text_preview %}
+      <p class="text-muted small">
+        Prévia do texto. Use <strong>Baixar</strong> para ver a formatação original.
+      </p>
+      <pre class="doc-text doc-scroll">{{ text_preview }}{% if doc.content|length > text_preview|length %}
+
+… (continua){% endif %}</pre>
+    {% else %}
+      <p class="text-muted mb-0">
+        Não foi possível ler o conteúdo deste arquivo. Baixe para abrir no programa de origem.
+      </p>
+    {% endif %}
+  {% endif %}
+</div></div>
+
+{% if doc.images %}
+<div class="card mt-4"><div class="card-body">
+  <h2 class="h6">Imagens do documento <span class="text-muted">({{ doc.images|length }})</span></h2>
+  <div class="image-gallery">
+    {% for img in doc.images %}
+      <a href="{{ url_for('documents.image', doc_id=doc.id, image_id=img.id) }}"
+         target="_blank" rel="noopener" class="image-thumb"
+         title="{{ img.source_ref }} · {{ img.width }}×{{ img.height }}">
+        <img loading="lazy" alt="{{ img.source_ref or 'imagem' }}"
+             src="{{ url_for('documents.image_thumb', doc_id=doc.id, image_id=img.id) }}">
+        {% if img.source_ref %}<span>{{ img.source_ref }}</span>{% endif %}
+      </a>
+    {% endfor %}
+  </div>
+</div></div>
+{% endif %}
+
+{% if view.kind in ('pdf', 'text_only') and text_preview %}
+<details class="mt-4">
+  <summary class="text-muted small">Ver texto extraído (para copiar ou conferir a indexação)</summary>
+  <pre class="doc-text doc-scroll mt-2">{{ text_preview }}{% if doc.content|length > text_preview|length %}
+
+… (continua){% endif %}</pre>
+</details>
+{% endif %}
+
+{# ---------- Metadados editaveis ---------- #}
+<div class="card mt-4"><div class="card-body">
+  <h2 class="h6">Informações do documento</h2>
+  <p class="text-muted small">
+    Título, resumo e tags foram extraídos automaticamente do arquivo. Ajuste se precisar.
+  </p>
+  <form method="post" action="{{ url_for('documents.edit', doc_id=doc.id) }}">
+    {{ form.hidden_tag() }}
+    {{ field(form.title) }}
+    {{ field(form.description, rows=3) }}
+    {{ field(form.tags) }}
+    {{ form.submit(class="btn btn-sm btn-primary") }}
+  </form>
+</div></div>
+{% endblock %}

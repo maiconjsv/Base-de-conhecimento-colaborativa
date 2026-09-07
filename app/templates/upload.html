@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Enviar documento{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Enviar documento</h1>
+
+<form method="post" enctype="multipart/form-data" id="upload-form">
+  {{ form.hidden_tag() }}
+
+  <label id="dropzone" for="{{ form.files.id }}" class="dropzone">
+    <div class="dropzone-inner">
+      <div class="dropzone-icon">📎</div>
+      <p class="mb-1"><strong>Arraste os arquivos aqui</strong></p>
+      <p class="text-muted mb-2">ou</p>
+      <span class="btn btn-primary btn-sm">Anexar arquivos</span>
+      <p class="text-muted small mt-2 mb-0">
+        PDF, Word, Excel, PowerPoint, texto ou Markdown. Pode selecionar vários.
+        Limite de {{ max_mb }} MB no total.
+      </p>
+    </div>
+    {{ form.files(class="visually-hidden", multiple=True) }}
+  </label>
+
+  {% for error in form.files.errors %}
+    <div class="text-danger small mt-2">{{ error }}</div>
+  {% endfor %}
+  <div id="client-error" class="text-danger small mt-2" hidden></div>
+
+  <ul id="file-list" class="list-group mt-3" hidden></ul>
+
+  <noscript>
+    <button type="submit" class="btn btn-success mt-3">Enviar</button>
+  </noscript>
+</form>
+
+<p class="text-muted small mt-3">
+  O sistema lê o arquivo e monta sozinho o título, um resumo e as palavras-chave.
+  Depois você pode ajustar essas informações na página do documento.
+</p>
+
+<div id="upload-overlay" class="upload-overlay" hidden>
+  <div class="spinner-border text-primary" role="status"></div>
+  <p class="mt-3 mb-0 fw-semibold">Enviando e processando…</p>
+  <p class="text-muted small">Extraindo texto e imagens. Isso pode levar alguns segundos.</p>
+</div>
+
+<script>
+(function () {
+  const form = document.getElementById('upload-form');
+  const input = document.getElementById('{{ form.files.id }}');
+  const dropzone = document.getElementById('dropzone');
+  const list = document.getElementById('file-list');
+  const overlay = document.getElementById('upload-overlay');
+  const clientError = document.getElementById('client-error');
+  const MAX_BYTES = {{ max_bytes }};
+  let submitting = false;
+
+  function human(bytes) {
+    const u = ['B', 'KB', 'MB', 'GB'];
+    let i = 0, n = bytes;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return n.toFixed(i ? 1 : 0) + ' ' + u[i];
+  }
+
+  function showFiles(files) {
+    list.innerHTML = '';
+    files.forEach(function (f) {
+      const li = document.createElement('li');
+      li.className = 'list-group-item d-flex justify-content-between';
+      li.innerHTML = '<span>' + f.name + '</span>' +
+                     '<span class="text-muted small">' + human(f.size) + '</span>';
+      list.appendChild(li);
+    });
+    list.hidden = files.length === 0;
+  }
+
+  function handleFiles() {
+    const files = Array.from(input.files);
+    if (!files.length) return;
+    showFiles(files);
+
+    const total = files.reduce(function (sum, f) { return sum + f.size; }, 0);
+    if (MAX_BYTES && total > MAX_BYTES) {
+      clientError.textContent = 'A seleção tem ' + human(total) + ', acima do limite de '
+        + human(MAX_BYTES) + '. Envie menos arquivos por vez.';
+      clientError.hidden = false;
+      return;
+    }
+    clientError.hidden = true;
+
+    // "ao anexar o documento, um retorno com reloading": envia na hora
+    submitting = true;
+    overlay.hidden = false;
+    form.submit();
+  }
+
+  input.addEventListener('change', handleFiles);
+
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    dropzone.addEventListener(ev, function (e) {
+      e.preventDefault();
+      if (!submitting) dropzone.classList.add('is-dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    dropzone.addEventListener(ev, function (e) {
+      e.preventDefault();
+      dropzone.classList.remove('is-dragover');
+    });
+  });
+  dropzone.addEventListener('drop', function (e) {
+    if (submitting) return;
+    if (e.dataTransfer && e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      handleFiles();
+    }
+  });
+
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) { overlay.hidden = true; submitting = false; }
+  });
+})();
+</script>
+{% endblock %}
