@@ -2,10 +2,13 @@
 {% from "_macros.html" import field %}
 {% block title %}Configuração inicial{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-6">
-    <div class="card"><div class="card-body">
-      <h1 class="h4 mb-1">Configuração inicial</h1>
+<div class="auth-shell">
+  <div class="auth-card" style="max-width: 30rem;">
+    <div class="auth-card__head">
+      <img class="auth-card__mark" src="{{ url_for('static', filename='brand-mark-white.png') }}" alt="Semantix">
+      <h1>Configuração inicial</h1>
+    </div>
+    <div class="auth-card__body">
       <p class="text-muted">
         Esta é a primeira vez que a Base de Conhecimento roda nesta cópia.
         Crie o usuário administrador para começar.
@@ -17,7 +20,7 @@
         {{ field(form.confirm) }}
         {{ form.submit(class="btn btn-primary w-100", value="Criar e entrar") }}
       </form>
-    </div></div>
+    </div>
   </div>
 </div>
 {% endblock %}

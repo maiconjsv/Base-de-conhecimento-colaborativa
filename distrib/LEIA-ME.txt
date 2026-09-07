@@ -19,6 +19,15 @@ Tudo fica na subpasta "dados" (banco, arquivos enviados, imagens).
   com todos os documentos ja dentro.
 - NAO edite os arquivos dentro de "dados" na mao.
 
+COMO ATUALIZAR (versao nova do programa)
+---------------------------------------
+Quando chegar o arquivo "AtualizarBaseConhecimento.exe":
+1. Feche o programa.
+2. Copie esse .exe para DENTRO desta pasta (junto do BaseConhecimento.exe).
+3. De duplo clique nele e espere a mensagem de sucesso.
+Ele troca so os arquivos do programa e faz backup da pasta "dados"
+em "_backup". Seus documentos, usuarios e senhas nao sao afetados.
+
 REQUISITOS
 ----------
 Windows 10 ou 11. Nao precisa instalar nada (nem Python).

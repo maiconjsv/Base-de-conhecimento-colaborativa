@@ -23,7 +23,11 @@ título, descrição e tags).
   espaçadores minúsculos e duplicatas são descartados). Desligue com
   `EXTRACT_IMAGES=0`.
 - **Busca:** SQLite FTS5 (nativo, sem serviço externo) com ranking por relevância
-  (`bm25`) e trechos destacados (`snippet`).
+  (`bm25`) e trechos destacados (`snippet`). Cada resultado abre um **localizador**
+  in-loco (sem recarregar): clica no documento e ele expande mostrando *todas* as
+  ocorrências do termo dentro dele, com o termo marcado — casamento por prefixo e
+  sem acento, igual ao índice. Endpoint `GET /search/hits/<id>?q=…` (JSON),
+  lógica em `app/locator.py`.
 - **Formatos com extração de texto:** PDF, DOCX, TXT/Markdown, XLSX, PPTX, CSV.
 - **Acesso:** login simples por usuário/senha (Flask-Login). Todo usuário logado
   vê todos os documentos e pode enviar, editar e remover.
@@ -80,7 +84,8 @@ app/
   models.py       User, Document
   extract.py      extração de texto + metadados embutidos por formato
   images.py       extração das imagens embutidas + miniaturas (Pillow)
-  search.py       consulta FTS5 (bm25 + snippet)
+  search.py       consulta FTS5 (bm25 + snippet) + contagem de ocorrências
+  locator.py      acha todas as ocorrências dos termos dentro de um documento
   errors.py       páginas de erro 403/404/413/500
   auth/           blueprint de login/registro
   documents/      blueprint de upload/listagem/busca/detalhe
@@ -111,14 +116,25 @@ Isso gera `dist\BaseConhecimento\` com:
 - `_internal\` — bibliotecas (não mexer).
 - `dados\` — banco, arquivos enviados, imagens e a chave de sessão.
 - `LEIA-ME.txt` — instruções para quem receber.
+- `versao.txt` — carimbo da versão (usado pelo atualizador).
+
+Além da pasta, o build gera `dist\AtualizarBaseConhecimento.exe`: um executável
+único com a versão nova embutida. Para atualizar uma cópia já instalada, a pessoa
+copia esse `.exe` para dentro da pasta do programa e executa — ele para o app,
+faz backup de `dados\` em `_backup\`, troca só `BaseConhecimento.exe` e
+`_internal\`, e **não toca** em `dados\`, `.env` nem `secret.key` (rollback
+automático se falhar).
 
 **Primeiro uso:** o programa abre a tela *Configuração inicial* para criar o
 usuário administrador. Depois vai direto para o login.
 
-**Distribuir / atualizar para a empresa:** zipe a pasta `dist\BaseConhecimento`
-inteira e envie. Quem receber extrai e abre o `.exe` — com todos os documentos
-já dentro (eles moram em `dados\`). Cada cópia é independente; defina quem é o
-"dono" da base e redistribua o zip quando houver mudanças.
+**Instalação nova:** zipe a pasta `dist\BaseConhecimento` inteira e envie. Quem
+receber extrai e abre o `.exe` — com todos os documentos já dentro (eles moram
+em `dados\`).
+
+**Atualizar quem já usa:** envie só o `dist\AtualizarBaseConhecimento.exe`
+(ver acima). Cada cópia é independente; defina quem é o "dono" da base e
+redistribua/atualize quando houver mudanças.
 
 **Backup:** copiar a pasta `dados\`.
 

@@ -1,0 +1,45 @@
+ATUALIZAR A BASE DE CONHECIMENTO
+===============================
+
+Voce recebeu o arquivo "AtualizarBaseConhecimento.exe".
+Ele traz a versao nova do programa dentro dele.
+
+PASSO A PASSO
+-------------
+1. Feche o programa (feche a janela da Base de Conhecimento).
+
+2. Abra a pasta onde a Base de Conhecimento esta instalada - aquela
+   com "BaseConhecimento.exe" e a pasta "dados" dentro.
+
+3. Copie "AtualizarBaseConhecimento.exe" para DENTRO dessa pasta.
+
+4. De duplo clique em "AtualizarBaseConhecimento.exe".
+   Uma janela preta abre e mostra o progresso.
+
+5. Quando aparecer "atualizada com sucesso", pronto. O programa
+   reabre sozinho.
+
+O QUE ELE FAZ
+-------------
+- Encerra o programa se ainda estiver aberto.
+- Faz uma copia de seguranca da pasta "dados" em "_backup".
+- Troca so os arquivos do programa (BaseConhecimento.exe e _internal).
+- NAO mexe nos seus documentos, usuarios, senhas nem configuracoes -
+  tudo isso vive na pasta "dados", que nao e tocada.
+- Se algo der errado no meio, desfaz sozinho. Seus dados ficam intactos.
+
+DEPOIS
+------
+- Pode apagar o "AtualizarBaseConhecimento.exe" da pasta (ele ja fez o servico).
+- A pasta "_backup" guarda as 2 copias mais recentes de "dados".
+  Pode apaga-la se estiver com pouco espaco e o programa estiver funcionando.
+
+PROBLEMAS
+---------
+- "Windows protegeu o seu PC": clique em "Mais informacoes" -> "Executar
+  assim mesmo" (normal em .exe sem assinatura digital).
+- "A atualizacao falhou e foi desfeita" + programa em "C:\Program Files":
+  mova a pasta do programa para outro lugar (ex.: "C:\BaseConhecimento")
+  ou clique com o botao direito no atualizador -> "Executar como administrador".
+- "Precisa estar DENTRO da pasta do programa": voce executou o atualizador
+  de fora. Copie ele para junto do "BaseConhecimento.exe" e tente de novo.

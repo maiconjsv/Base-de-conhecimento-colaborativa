@@ -12,17 +12,17 @@
 {% endmacro %}
 
 {% macro doc_row(doc) %}
-  <div class="d-flex justify-content-between align-items-start border-bottom py-2">
+  <div class="doc-item">
     <div>
-      <a class="fw-semibold text-decoration-none" href="{{ url_for('documents.detail', doc_id=doc.id) }}">{{ doc.title }}</a>
-      <div class="small text-muted">
+      <a class="doc-item__title" href="{{ url_for('documents.detail', doc_id=doc.id) }}">{{ doc.title }}</a>
+      <div class="doc-item__meta">
         {{ doc.original_filename }} · {{ doc.size_human }} ·
         {{ doc.uploaded_at.strftime('%d/%m/%Y %H:%M') }}
         {% if doc.images %}· 📷 {{ doc.images|length }}{% endif %}
-        {% if not doc.extraction_ok %}· <span class="text-warning">sem texto extraido</span>{% endif %}
+        {% if not doc.extraction_ok %}· <span class="text-warning-emphasis">sem texto extraido</span>{% endif %}
       </div>
-      {% for tag in doc.tag_list %}<span class="badge text-bg-secondary">{{ tag }}</span> {% endfor %}
+      <div>{% for tag in doc.tag_list %}<span class="badge text-bg-secondary">{{ tag }}</span>{% endfor %}</div>
     </div>
-    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('documents.download', doc_id=doc.id) }}">Baixar</a>
+    <a class="btn btn-sm btn-outline-secondary flex-shrink-0" href="{{ url_for('documents.download', doc_id=doc.id) }}">Baixar</a>
   </div>
 {% endmacro %}

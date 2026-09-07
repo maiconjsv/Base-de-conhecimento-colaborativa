@@ -3,6 +3,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -12,8 +13,9 @@ from flask import (
 from flask_login import current_user, login_required
 
 from ..db import db
+from ..locator import compile_terms, find_snippets
 from ..models import Document, DocumentImage
-from ..search import search_documents
+from ..search import search_documents, tokenize
 from . import preview as preview_mod
 from .forms import DeleteForm, EditForm, UploadForm
 from .service import delete_document, ingest_file
@@ -52,6 +54,48 @@ def search():
         total=total,
         page=page,
         pages=pages,
+    )
+
+
+_HIT_FIELDS = (
+    ("Título", "title"),
+    ("Resumo", "description"),
+    ("Tags", "tags"),
+    ("Conteúdo", "content"),
+)
+_HITS_PER_FIELD = 200
+
+
+@bp.route("/search/hits/<int:doc_id>")
+@login_required
+def search_hits(doc_id: int):
+    """Todas as ocorrencias dos termos dentro de um documento (JSON).
+
+    Chamado por fetch() quando o usuario expande um resultado da busca.
+    """
+    doc = db.get_or_404(Document, doc_id)
+    term_re = compile_terms(tokenize(request.args.get("q", "")))
+
+    groups, count = [], 0
+    if term_re is not None:
+        for label, attr in _HIT_FIELDS:
+            snippets, found = find_snippets(
+                getattr(doc, attr) or "", term_re, max_hits=_HITS_PER_FIELD
+            )
+            count += found
+            if snippets:
+                groups.append(
+                    {"label": label, "snippets": snippets, "shown": len(snippets), "total": found}
+                )
+
+    return jsonify(
+        {
+            "doc_id": doc.id,
+            "title": doc.title,
+            "count": count,
+            "groups": groups,
+            "extraction_ok": doc.extraction_ok,
+        }
     )
 
 

@@ -1,27 +1,47 @@
 {% extends "base.html" %}
 {% block title %}Busca: {{ query }}{% endblock %}
 {% block content %}
-<h1 class="h4">Busca</h1>
+<div class="page-header"><h1 class="h4">Busca</h1></div>
 
-<form class="input-group mb-4" action="{{ url_for('documents.search') }}" method="get">
+<form class="input-group input-group-lg mb-4" action="{{ url_for('documents.search') }}" method="get">
   <input class="form-control" type="search" name="q" value="{{ query }}"
          placeholder="Digite palavras-chave…" autofocus>
-  <button class="btn btn-primary" type="submit">Buscar</button>
+  <button class="btn btn-primary px-4" type="submit">Buscar</button>
 </form>
 
 {% if query %}
-  <p class="text-muted">{{ total }} resultado(s) para <strong>{{ query }}</strong></p>
+  <p class="text-muted">{{ total }} documento(s) para <strong>{{ query }}</strong></p>
+
   {% for item in items %}
     {% set doc = item.document %}
-    <div class="card mb-2"><div class="card-body">
-      <a class="h6 text-decoration-none" href="{{ url_for('documents.detail', doc_id=doc.id) }}">{{ doc.title }}</a>
-      <div class="small text-muted mb-1">
-        {{ doc.original_filename }} · {{ doc.uploaded_at.strftime('%d/%m/%Y') }}
-        {% for tag in doc.tag_list %}· <span class="badge text-bg-secondary">{{ tag }}</span>{% endfor %}
+    <div class="search-result card mb-2" data-doc-id="{{ doc.id }}">
+      <button type="button" class="search-result__head" aria-expanded="false"
+              aria-controls="hits-{{ doc.id }}">
+        <span class="search-result__caret" aria-hidden="true"></span>
+        <span class="search-result__info">
+          <span class="doc-item__title">{{ doc.title }}</span>
+          <span class="doc-item__meta">
+            {{ doc.original_filename }} · {{ doc.uploaded_at.strftime('%d/%m/%Y') }}
+            {% for tag in doc.tag_list %}<span class="badge text-bg-secondary">{{ tag }}</span>{% endfor %}
+          </span>
+          <span class="search-snippet">{{ item.snippet | safe }}</span>
+        </span>
+        {% if item.hit_count %}
+          <span class="search-result__count">{{ item.hit_count }}
+            {{ 'ocorrência' if item.hit_count == 1 else 'ocorrências' }}</span>
+        {% endif %}
+      </button>
+
+      <div class="search-result__body" id="hits-{{ doc.id }}" hidden>
+        <div class="search-result__hits" data-loaded="0">
+          <span class="text-muted small">Carregando ocorrências…</span>
+        </div>
+        <div class="search-result__actions">
+          <a class="btn btn-sm btn-primary" href="{{ url_for('documents.detail', doc_id=doc.id) }}">Abrir documento</a>
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('documents.download', doc_id=doc.id) }}">Baixar arquivo</a>
+        </div>
       </div>
-      <p class="mb-1 search-snippet">{{ item.snippet | safe }}</p>
-      <a class="small" href="{{ url_for('documents.download', doc_id=doc.id) }}">Baixar arquivo</a>
-    </div></div>
+    </div>
   {% else %}
     <div class="alert alert-warning">Nada encontrado. Tente outras palavras.</div>
   {% endfor %}
@@ -35,5 +55,65 @@
       {% endfor %}
     </ul></nav>
   {% endif %}
+
+  <script>
+  (function () {
+    var HITS_BASE = "{{ url_for('documents.search') }}/hits/";
+    var QUERY = {{ query | tojson }};
+
+    function esc(s) {
+      var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+    }
+
+    function render(data) {
+      if (!data.count) {
+        if (data.extraction_ok === false) {
+          return '<p class="text-muted small mb-0">Este arquivo não teve o texto '
+               + 'extraído, então não dá para localizar os termos dentro dele.</p>';
+        }
+        return '<p class="text-muted small mb-0">Os termos casaram pelo índice, '
+             + 'mas não aparecem como palavra inteira no texto.</p>';
+      }
+      var html = '';
+      data.groups.forEach(function (g) {
+        html += '<div class="hit-group">';
+        html += '<div class="hit-group__label">' + esc(g.label);
+        if (g.total > g.shown) {
+          html += ' <span class="text-muted">(' + g.shown + ' de ' + g.total + ')</span>';
+        }
+        html += '</div>';
+        g.snippets.forEach(function (s) {
+          html += '<p class="hit-line">' + s + '</p>';   // s ja vem escapado + <mark>
+        });
+        html += '</div>';
+      });
+      return html;
+    }
+
+    document.querySelectorAll('.search-result').forEach(function (card) {
+      var head = card.querySelector('.search-result__head');
+      var body = card.querySelector('.search-result__body');
+      var box = card.querySelector('.search-result__hits');
+
+      head.addEventListener('click', function () {
+        var open = head.getAttribute('aria-expanded') === 'true';
+        head.setAttribute('aria-expanded', String(!open));
+        body.hidden = open;
+        if (open || box.dataset.loaded === '1') return;
+
+        box.dataset.loaded = '1';
+        fetch(HITS_BASE + encodeURIComponent(card.dataset.docId)
+              + '?q=' + encodeURIComponent(QUERY))
+          .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+          .then(function (data) { box.innerHTML = render(data); })
+          .catch(function () {
+            box.dataset.loaded = '0';
+            box.innerHTML = '<span class="text-danger small">'
+              + 'Não foi possível carregar as ocorrências. Tente de novo.</span>';
+          });
+      });
+    });
+  })();
+  </script>
 {% endif %}
 {% endblock %}

@@ -1,0 +1,34 @@
+BASE DE CONHECIMENTO
+====================
+
+COMO USAR
+---------
+1. Extraia esta pasta inteira em qualquer lugar do computador
+   (ex.: C:\BaseConhecimento ou a sua area de trabalho).
+2. Abra "BaseConhecimento.exe".
+3. Na primeira vez, o programa abre a tela de configuracao para voce
+   criar o usuario administrador. Nas proximas, vai direto para o login.
+4. Uma janela do programa abre sozinha. Para encerrar, feche essa janela.
+
+ONDE FICAM OS DADOS
+-------------------
+Tudo fica na subpasta "dados" (banco, arquivos enviados, imagens).
+- Fazer backup      = copiar a pasta "dados".
+- Enviar para outra pessoa / outro PC = zipar a pasta INTEIRA
+  (BaseConhecimento) e mandar. Quem receber extrai e abre o .exe,
+  com todos os documentos ja dentro.
+- NAO edite os arquivos dentro de "dados" na mao.
+
+REQUISITOS
+----------
+Windows 10 ou 11. Nao precisa instalar nada (nem Python).
+A janela usa o Microsoft Edge, que ja vem no Windows. Se por algum
+motivo a janela nao abrir, o programa abre no navegador padrao e
+mostra o endereco (http://127.0.0.1:5000).
+
+OBSERVACOES
+-----------
+- E um programa local: nada sai do seu computador, nao usa internet.
+- Cada copia e independente. Se duas pessoas editam copias diferentes,
+  as mudancas nao se juntam sozinhas - defina quem e o "dono" da base
+  e redistribua o zip quando atualizar.

@@ -139,15 +139,45 @@ Nada de instalar Python nem nada. Requer só Windows 10/11.
 
 1. `git pull` (ou copie o código novo).
 2. `pip install -r requirements-build.txt` (caso tenham mudado dependências).
-3. `.\build.ps1 -Clean`.
-4. Ao distribuir, oriente cada pessoa a **manter a própria pasta `dados\`** e
-   substituir só o `BaseConhecimento.exe` e a pasta `_internal\`.
-   (Ou: você reúne os dados de todos numa base só e redistribui completa.)
+3. `.\build.ps1 -Clean -Version 2026.09.07` (o `-Version` é opcional; sem ele
+   entra a data/hora atual).
+
+O build gera **duas coisas** em `dist\`:
+
+| Arquivo | Para quem | Como usar |
+|---|---|---|
+| `dist\BaseConhecimento\` (pasta) | **instalação nova** | zipe a pasta inteira e mande (item 2.2) |
+| `dist\AtualizarBaseConhecimento.exe` | **quem já usa** | mande só esse arquivo |
+
+**Atualizar quem já usa — mande só o `AtualizarBaseConhecimento.exe`.** A versão
+nova do programa vai *embutida* nesse `.exe`. Instrução para a pessoa (também no
+`COMO-ATUALIZAR.txt`):
+
+1. Fechar o programa.
+2. Copiar `AtualizarBaseConhecimento.exe` para **dentro da pasta do programa**
+   (a que tem `BaseConhecimento.exe` e `dados\`).
+3. Dar duplo clique nele.
+
+O atualizador:
+
+- encerra o programa se estiver aberto;
+- copia a pasta `dados\` para `_backup\dados-<data>` (guarda as 2 mais recentes);
+- troca **só** `BaseConhecimento.exe`, `_internal\`, `LEIA-ME.txt` e `versao.txt`;
+- **nunca toca** em `dados\`, `.env` nem `secret.key`;
+- se falhar no meio da troca, desfaz sozinho;
+- reabre o programa no fim.
+
+O `versao.txt` serve só para o atualizador avisar se você tentar aplicar uma
+versão igual ou mais antiga do que a instalada.
+
+> Ainda vale reunir os dados de todos numa base só e redistribuir a pasta
+> completa quando quiser consolidar — o atualizador resolve o *código*, não a
+> *fusão de conteúdo* entre cópias.
 
 ### Atualizou só o **conteúdo** (novos documentos)
 
-Não precisa recompilar. Copie a pasta `dados\` atualizada por cima da antiga na
-máquina de cada pessoa, ou redistribua o zip completo.
+Não precisa recompilar nem usar o atualizador. Copie a pasta `dados\` atualizada
+por cima da antiga na máquina de cada pessoa, ou redistribua o zip completo.
 
 > **Importante:** cada cópia é independente. Se duas pessoas editam cópias
 > diferentes, as mudanças **não se juntam sozinhas**. Defina quem é o "dono" da
@@ -192,7 +222,9 @@ alterações), mas depende do PC servidor estar ligado.
 | **Antivírus bloqueia / apaga o `.exe`** | Falso positivo comum com PyInstaller. Adicione a pasta às exceções do antivírus, ou peça ao TI para liberar. |
 | **"O servidor local não respondeu a tempo"** | Antivírus/firewall barrando o `127.0.0.1`, ou a porta 5000 ocupada. O programa tenta as portas 5000–5050 automaticamente; se todas falharem, feche o que estiver usando a porta. |
 | **Abre sempre na tela de configuração inicial** | A pasta `dados\` está vazia ou não está junto do `.exe`. Confirme que `dados\kb.sqlite` existe ao lado do `BaseConhecimento.exe`. |
-| **Perdi documentos depois de atualizar** | A pasta `dados\` foi substituída pela vazia do build novo. Restaure do backup. Na atualização, troque só `_internal\` e o `.exe`. |
+| **Perdi documentos depois de atualizar** | Só acontece se alguém substituiu a pasta inteira em vez de usar o `AtualizarBaseConhecimento.exe`. Restaure de `_backup\dados-<data>` (renomeie para `dados`) ou do seu backup. Use sempre o atualizador. |
+| **O atualizador diz "falhou e foi desfeita"** | Programa em `C:\Program Files` (sem permissão de escrita). Mova a pasta para `C:\BaseConhecimento` ou rode o atualizador como administrador. Os dados não foram tocados. |
+| **O atualizador diz "precisa estar DENTRO da pasta do programa"** | O `.exe` foi executado de fora. Copie-o para junto do `BaseConhecimento.exe`. |
 | **`build.ps1` falha com erro de política de execução** | `powershell -ExecutionPolicy Bypass -File .\build.ps1 -Clean` |
 | **`pip install` falha** | Confirme que a venv está ativa (`.\.venv\Scripts\Activate.ps1`) e que há internet. |
 | **PyInstaller não encontrado** | `pip install -r requirements-build.txt` dentro da venv. |
@@ -207,14 +239,17 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-build.txt
 
-# compilar
+# compilar (gera a pasta do programa E o AtualizarBaseConhecimento.exe)
 .\build.ps1 -Clean
 
 # testar
 dist\BaseConhecimento\BaseConhecimento.exe
 
-# empacotar para distribuir
+# empacotar instalacao nova
 Compress-Archive -Path dist\BaseConhecimento -DestinationPath BaseConhecimento.zip -Force
+
+# atualizar quem ja usa: mande so este arquivo
+dist\AtualizarBaseConhecimento.exe
 ```
 
 | Variável de ambiente | Efeito |

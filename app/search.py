@@ -5,10 +5,16 @@ import re
 from sqlalchemy import text
 
 from .db import db
+from .locator import compile_terms, count_matches
 from .models import Document
 
 # Palavras/tokens: letras e numeros em qualquer idioma, sem underscore.
 _TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+
+
+def tokenize(raw: str) -> list[str]:
+    """Termos da busca, do jeito que o FTS os enxerga."""
+    return _TOKEN_RE.findall(raw or "")
 
 
 def build_match_query(raw: str) -> str:
@@ -18,14 +24,29 @@ def build_match_query(raw: str) -> str:
     combinados por AND implicito. Assim caracteres especiais do FTS5 nunca
     chegam crus ao parser.
     """
-    tokens = _TOKEN_RE.findall(raw or "")
+    tokens = tokenize(raw)
     if not tokens:
         return ""
     return " ".join(f'"{tok}"*' for tok in tokens)
 
 
+def _hit_count(doc: Document, term_re) -> int:
+    """Quantas vezes os termos aparecem no documento (conteudo + metadados)."""
+    if term_re is None:
+        return 0
+    return (
+        count_matches(doc.title, term_re)
+        + count_matches(doc.description, term_re)
+        + count_matches(doc.tags, term_re)
+        + count_matches(doc.content, term_re)
+    )
+
+
 def search_documents(raw_query: str, page: int = 1, page_size: int = 10):
-    """Retorna (items, total). Cada item: dict com `document` e `snippet` (HTML)."""
+    """Retorna (items, total).
+
+    Cada item: {document, snippet (HTML do melhor trecho), hit_count}.
+    """
     match = build_match_query(raw_query)
     if not match:
         return [], 0
@@ -57,8 +78,13 @@ def search_documents(raw_query: str, page: int = 1, page_size: int = 10):
         return [], total
 
     docs = {d.id: d for d in Document.query.filter(Document.id.in_(ids)).all()}
+    term_re = compile_terms(tokenize(raw_query))
     items = [
-        {"document": docs[r.doc_id], "snippet": r.snip}
+        {
+            "document": docs[r.doc_id],
+            "snippet": r.snip,
+            "hit_count": _hit_count(docs[r.doc_id], term_re),
+        }
         for r in rows
         if r.doc_id in docs
     ]

@@ -1,11 +1,22 @@
 <#
-Gera o programa Windows em dist\BaseConhecimento\.
-Uso:   .\build.ps1            (build incremental)
-       .\build.ps1 -Clean     (apaga build\ e dist\ antes)
-Depois: zipe a pasta dist\BaseConhecimento inteira e compartilhe.
-#>
-param([switch]$Clean)
+Gera o programa Windows e o atualizador.
+Uso:   .\build.ps1                       (build incremental)
+       .\build.ps1 -Clean                (apaga build\ e dist\ antes)
+       .\build.ps1 -Version 2026.09.07   (carimba essa versao; padrao = data/hora)
 
+Saidas em dist\:
+  BaseConhecimento\               -> instalacao nova (zipe a pasta inteira)
+  AtualizarBaseConhecimento.exe   -> atualizacao (mande so este arquivo)
+
+Atualizar uma copia ja instalada: a pessoa copia o AtualizarBaseConhecimento.exe
+para dentro da pasta do programa e executa. Ele preserva a pasta "dados".
+#>
+param(
+    [switch]$Clean,
+    [string]$Version = (Get-Date -Format "yyyy.MM.dd.HHmm")
+)
+
+$ErrorActionPreference = "Stop"
 $py = ".\.venv\Scripts\python.exe"
 if (-not (Test-Path $py)) { Write-Error "Crie a venv primeiro: python -m venv .venv"; exit 1 }
 
@@ -19,6 +30,9 @@ $ErrorActionPreference = "Continue"
 & $py -m pip install -r requirements-build.txt --quiet
 if ($LASTEXITCODE -ne 0) { Write-Error "pip install falhou (exit $LASTEXITCODE)"; exit 1 }
 
+# --------------------------------------------------------------------------- #
+# 1. O programa
+# --------------------------------------------------------------------------- #
 & $py -m PyInstaller --noconfirm --clean BaseConhecimento.spec
 if ($LASTEXITCODE -ne 0) { Write-Error "PyInstaller falhou (exit $LASTEXITCODE)"; exit 1 }
 
@@ -31,7 +45,42 @@ if (Test-Path "distrib\LEIA-ME.txt") {
     Copy-Item "distrib\LEIA-ME.txt" "$out\LEIA-ME.txt" -Force
 }
 
+# carimbo de versao (usado pelo atualizador para evitar downgrade acidental).
+# Sem BOM: o atualizador le como texto simples.
+[System.IO.File]::WriteAllText((Join-Path (Resolve-Path $out) "versao.txt"), $Version)
+
+# --------------------------------------------------------------------------- #
+# 2. payload.zip = o programa SEM a pasta "dados"
+# --------------------------------------------------------------------------- #
+$stage = "build\payload"
+Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $stage | Out-Null
+
+Copy-Item "$out\*" $stage -Recurse -Force
+Remove-Item -Recurse -Force "$stage\dados" -ErrorAction SilentlyContinue
+
+Remove-Item -Force "build\payload.zip" -ErrorAction SilentlyContinue
+Compress-Archive -Path "$stage\*" -DestinationPath "build\payload.zip" -Force
+
+# --------------------------------------------------------------------------- #
+# 3. O atualizador (arquivo unico, com o payload embutido)
+# --------------------------------------------------------------------------- #
+& $py -m PyInstaller --noconfirm --clean Atualizador.spec
+if ($LASTEXITCODE -ne 0) { Write-Error "PyInstaller (atualizador) falhou (exit $LASTEXITCODE)"; exit 1 }
+
+if (Test-Path "distrib\COMO-ATUALIZAR.txt") {
+    Copy-Item "distrib\COMO-ATUALIZAR.txt" "dist\COMO-ATUALIZAR.txt" -Force
+}
+
+# --------------------------------------------------------------------------- #
+$ErrorActionPreference = "Stop"
 Write-Host ""
-Write-Host "OK -> $out" -ForegroundColor Green
-Write-Host "Teste: $out\BaseConhecimento.exe"
-Write-Host "Distribuir: zipe a pasta '$out' inteira (o zip leva os dados em dados\)."
+Write-Host "OK  (versao $Version)" -ForegroundColor Green
+Write-Host ""
+Write-Host "Instalacao nova:" -ForegroundColor Cyan
+Write-Host "  zipe a pasta '$out' inteira e mande."
+Write-Host "  Ex.: Compress-Archive -Path $out -DestinationPath BaseConhecimento-$Version.zip -Force"
+Write-Host ""
+Write-Host "Atualizacao de quem ja usa:" -ForegroundColor Cyan
+Write-Host "  mande so 'dist\AtualizarBaseConhecimento.exe' (+ dist\COMO-ATUALIZAR.txt)."
+Write-Host "  A pessoa copia o .exe para a pasta do programa e executa. 'dados' e preservada."
