@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Perguntar{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="h4">Perguntar à base</h1>
+  <span class="text-muted small">Responde com trechos dos documentos cadastrados, tudo no seu computador.</span>
+</div>
+
+<div class="chat card">
+  <div class="chat__log" id="chat-log" aria-live="polite">
+    <div class="chat-msg chat-msg--bot">
+      <div class="chat-msg__bubble">
+        <p class="mb-2">Escreva sua dúvida do jeito que falaria com alguém, por exemplo
+          <em>“como faço para configurar o acesso à VPN?”</em>. Eu separo as palavras-chave,
+          procuro em todos os documentos e mostro os trechos que melhor respondem, além de
+          todos os documentos que citam o assunto.</p>
+        {% if topics %}
+          <div class="small text-muted mb-1">Assuntos frequentes na base:</div>
+          <div class="chat-topics">
+            {% for t in topics %}<button type="button" class="chat-chip" data-ask="{{ t }}">{{ t }}</button>{% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <form class="chat__form" id="chat-form" autocomplete="off">
+    <input class="form-control" id="chat-input" name="q" maxlength="500"
+           placeholder="Pergunte algo sobre a documentação…" value="{{ initial }}" autofocus>
+    <button class="btn btn-primary px-4" type="submit">Perguntar</button>
+  </form>
+</div>
+
+<script>
+(function () {
+  var API = "{{ url_for('documents.ask_api') }}";
+  var HITS_BASE = "{{ url_for('documents.search') }}/hits/";
+  var SEARCH = "{{ url_for('documents.search') }}";
+  var INITIAL = {{ initial | tojson }};
+
+  var log = document.getElementById('chat-log');
+  var form = document.getElementById('chat-form');
+  var input = document.getElementById('chat-input');
+  var busy = false;
+
+  function esc(s) {
+    var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML;
+  }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+  function addMsg(kind, html) {
+    var wrap = document.createElement('div');
+    wrap.className = 'chat-msg chat-msg--' + kind;
+    wrap.innerHTML = '<div class="chat-msg__bubble">' + html + '</div>';
+    log.appendChild(wrap);
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return wrap;
+  }
+
+  function termsHtml(data) {
+    if (!data.terms.length) return '';
+    var html = '<div class="chat-terms"><span class="small text-muted">Procurei por:</span>';
+    data.terms.forEach(function (t) {
+      var cls = t.docs ? 'chat-term' : 'chat-term chat-term--missing';
+      var title = t.docs ? plural(t.docs, 'documento', 'documentos') : 'nenhum documento';
+      html += '<span class="' + cls + '" title="' + esc(title) + '">' + esc(t.word)
+            + '<span class="chat-term__n">' + t.docs + '</span></span>';
+    });
+    return html + '</div>';
+  }
+
+  function headline(data) {
+    if (data.status === 'empty') {
+      return 'Não identifiquei palavras-chave na pergunta. Tente citar o assunto, '
+           + 'um sistema, um termo ou um código.';
+    }
+    if (data.status === 'none') {
+      return 'Não encontrei nenhum documento que mencione esses termos. '
+           + 'Tente sinônimos ou palavras mais gerais.';
+    }
+    var html = '';
+    if (data.status === 'full') {
+      html = 'Encontrei ' + plural(data.total_documents, 'documento', 'documentos')
+           + ' sobre isso. Os trechos que melhor respondem:';
+    } else if (data.passages.length) {
+      html = 'Nenhum trecho reúne todos os termos juntos. Estes são os mais próximos '
+           + '(' + plural(data.total_documents, 'documento citado', 'documentos citados') + '):';
+    } else {
+      html = 'Os termos aparecem só no título ou nas tags de '
+           + plural(data.total_documents, 'documento', 'documentos') + ':';
+    }
+    if (data.missing.length) {
+      html += '<div class="small text-muted mt-1">Nenhum documento menciona: <strong>'
+            + data.missing.map(esc).join(', ') + '</strong>.</div>';
+    }
+    return html;
+  }
+
+  function passageHtml(p, idx) {
+    var badge = p.complete
+      ? '<span class="chat-passage__badge">todos os termos</span>'
+      : '<span class="chat-passage__badge chat-passage__badge--partial">'
+        + esc(p.covered.join(', ')) + '</span>';
+    return '<article class="chat-passage' + (idx === 0 ? ' chat-passage--top' : '') + '">'
+      + '<div class="chat-passage__head">'
+      + '<a class="doc-item__title" href="' + esc(p.url) + '">' + esc(p.title) + '</a>' + badge
+      + '</div>'
+      + (p.kind === 'table'
+          ? '<div class="chat-passage__table">' + p.html + '</div>'   // tabela pronta do servidor
+          : '<p class="chat-passage__text">' + p.html + '</p>'        // ja vem escapado + <mark>
+            + '<div class="chat-passage__meta">' + esc(p.filename) + '</div>')
+      + '</article>';
+  }
+
+  function docsHtml(data) {
+    if (!data.documents.length) return '';
+    var shown = data.documents.length;
+    var label = 'Todos os documentos que mencionam (' + data.total_documents + ')';
+    if (data.total_documents > shown) label += ', mostrando ' + shown;
+    var html = '<details class="chat-docs"' + (data.passages.length ? '' : ' open') + '>'
+             + '<summary>' + esc(label) + '</summary><ul class="chat-docs__list">';
+    data.documents.forEach(function (d) {
+      html += '<li class="chat-doc" data-doc-id="' + d.doc_id + '">'
+        + '<div class="chat-doc__row">'
+        + '<div class="chat-doc__info"><a class="doc-item__title" href="' + esc(d.url) + '">'
+        + esc(d.title) + '</a>'
+        + '<div class="doc-item__meta">' + esc(d.filename) + ' · ' + esc(d.date) + '</div></div>'
+        + '<div class="chat-doc__terms">'
+        + d.terms.map(function (w) { return '<span class="chat-term chat-term--sm">' + esc(w) + '</span>'; }).join('')
+        + '</div>'
+        + '<button type="button" class="btn btn-sm btn-outline-secondary chat-doc__toggle">Ocorrências</button>'
+        + '</div><div class="chat-doc__hits" hidden></div></li>';
+    });
+    return html + '</ul></details>';
+  }
+
+  function render(data) {
+    var html = termsHtml(data) + '<p class="chat-headline">' + headline(data) + '</p>';
+    data.passages.forEach(function (p, i) { html += passageHtml(p, i); });
+    html += docsHtml(data);
+    if (data.hits_q) {
+      html += '<div class="chat-foot"><a class="small" href="' + SEARCH + '?q='
+            + encodeURIComponent(data.hits_q) + '">Abrir na busca completa</a></div>';
+    }
+    return html;
+  }
+
+  function hitsHtml(data) {
+    if (!data.count) {
+      return '<p class="text-muted small mb-0">Os termos estão nos dados do documento, '
+           + 'mas não aparecem como palavra inteira no texto.</p>';
+    }
+    var html = data.tables_html || '';   // linhas da planilha, ja escapadas pelo servidor
+    data.groups.forEach(function (g) {
+      html += '<div class="hit-group"><div class="hit-group__label">' + esc(g.label);
+      if (g.total > g.shown) html += ' <span class="text-muted">(' + g.shown + ' de ' + g.total + ')</span>';
+      html += '</div>';
+      g.snippets.forEach(function (s) { html += '<p class="hit-line">' + s + '</p>'; });
+      html += '</div>';
+    });
+    return html;
+  }
+
+  // "Ocorrências" de cada documento: busca sob demanda, reaproveitando /search/hits
+  log.addEventListener('click', function (ev) {
+    var chip = ev.target.closest('[data-ask]');
+    if (chip) { ask(chip.getAttribute('data-ask')); return; }
+
+    var btn = ev.target.closest('.chat-doc__toggle');
+    if (!btn) return;
+    var li = btn.closest('.chat-doc');
+    var box = li.querySelector('.chat-doc__hits');
+    var q = btn.closest('.chat-msg').dataset.hitsQ || '';
+    box.hidden = !box.hidden;
+    btn.classList.toggle('active', !box.hidden);
+    if (box.hidden || box.dataset.loaded === '1') return;
+    box.dataset.loaded = '1';
+    box.innerHTML = '<span class="text-muted small">Carregando…</span>';
+    fetch(HITS_BASE + encodeURIComponent(li.dataset.docId) + '?q=' + encodeURIComponent(q))
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (data) { box.innerHTML = hitsHtml(data); })
+      .catch(function () {
+        box.dataset.loaded = '0';
+        box.innerHTML = '<span class="text-danger small">Não foi possível carregar. Tente de novo.</span>';
+      });
+  });
+
+  function ask(question) {
+    question = (question || '').trim();
+    if (!question || busy) return;
+    busy = true;
+    input.value = '';
+    addMsg('user', esc(question));
+    var pending = addMsg('bot', '<span class="chat-typing"><i></i><i></i><i></i></span>');
+
+    fetch(API + '?q=' + encodeURIComponent(question))
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (data) {
+        pending.dataset.hitsQ = data.hits_q || '';
+        pending.querySelector('.chat-msg__bubble').innerHTML = render(data);
+      })
+      .catch(function () {
+        pending.querySelector('.chat-msg__bubble').innerHTML =
+          '<span class="text-danger">Não consegui consultar a base agora. Tente de novo.</span>';
+      })
+      .finally(function () {
+        busy = false;
+        pending.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        input.focus();
+      });
+  }
+
+  form.addEventListener('submit', function (ev) { ev.preventDefault(); ask(input.value); });
+  if (INITIAL) ask(INITIAL);
+})();
+</script>
+{% endblock %}

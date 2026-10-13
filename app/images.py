@@ -92,6 +92,7 @@ _ITERATORS = {
     "docx": _iter_docx,
     "pptx": _iter_pptx,
     "xlsx": _iter_xlsx,
+    "xlsm": _iter_xlsx,
 }
 
 

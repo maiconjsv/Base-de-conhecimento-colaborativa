@@ -5,7 +5,7 @@ from wtforms.validators import DataRequired, Length, Optional
 
 ALLOWED = [
     "pdf", "doc", "docx", "txt", "md", "markdown",
-    "xls", "xlsx", "ppt", "pptx", "csv",
+    "xls", "xlsx", "xlsm", "ppt", "pptx", "csv",
 ]
 
 

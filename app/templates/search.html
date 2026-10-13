@@ -7,10 +7,15 @@
   <input class="form-control" type="search" name="q" value="{{ query }}"
          placeholder="Digite palavras-chave…" autofocus>
   <button class="btn btn-primary px-4" type="submit">Buscar</button>
+  <button class="btn btn-outline-secondary" type="submit" data-newtab
+          title="Abre esta busca numa aba nova; a atual continua como está">Em nova aba</button>
 </form>
 
 {% if query %}
-  <p class="text-muted">{{ total }} documento(s) para <strong>{{ query }}</strong></p>
+  <p class="text-muted d-flex flex-wrap gap-2 align-items-baseline">
+    <span>{{ total }} documento(s) para <strong>{{ query }}</strong></span>
+    <a class="small" href="{{ url_for('documents.workspace', q=query) }}">Abrir em uma aba de Pesquisas (para comparar e cruzar)</a>
+  </p>
 
   {% for item in items %}
     {% set doc = item.document %}
@@ -75,6 +80,10 @@
              + 'mas não aparecem como palavra inteira no texto.</p>';
       }
       var html = '';
+      if (data.tables_html) {
+        html += '<div class="hit-group"><div class="hit-group__label">Linhas da planilha</div>'
+              + data.tables_html + '</div>';   // ja vem escapado pelo servidor
+      }
       data.groups.forEach(function (g) {
         html += '<div class="hit-group">';
         html += '<div class="hit-group__label">' + esc(g.label);

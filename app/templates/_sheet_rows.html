@@ -1,0 +1,42 @@
+{# Linhas de planilha encontradas, agrupadas por aba, com a fonte de cada uma.
+   Renderizado por app/sheets.py:render_row_groups (busca e assistente). #}
+<div class="sheet-hits">
+  {% for g in groups %}
+  <div class="sheet-hits__group">
+    <div class="sheet-hits__source">
+      <span class="sheet-hits__file">{{ doc.original_filename }}</span>
+      <span class="sheet-hits__sep">›</span>
+      <span>aba <strong>{{ g.sheet.name }}</strong></span>
+      <span class="text-muted">· {{ g.total }} {{ 'linha' if g.total == 1 else 'linhas' }}
+        {%- if g.total > g.rows|length %}, mostrando {{ g.rows|length }}{% endif %}</span>
+    </div>
+    <div class="sheet-grid-wrap sheet-grid-wrap--mini">
+      <table class="sheet-grid">
+        <thead>
+          <tr class="sheet-grid__letters">
+            <th class="sheet-grid__corner"></th>
+            {% for col in g.columns %}<th>{{ col.letter }}</th>{% endfor %}
+          </tr>
+          {% if g.sheet.header_row %}
+          <tr class="sheet-grid__header">
+            <th class="sheet-grid__rownum">{{ g.sheet.header_row }}</th>
+            {% for col in g.columns %}<th>{{ col.name }}</th>{% endfor %}
+          </tr>
+          {% endif %}
+        </thead>
+        <tbody>
+          {% for row in g.rows %}
+          <tr>
+            <th class="sheet-grid__rownum">
+              <a href="{{ row.url }}" title="Abrir a planilha nesta linha">{{ row.number }}</a>
+            </th>
+            {% for cell in row.cells %}<td>{{ cell }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+  <div class="sheet-hits__hint">Clique no número da linha para abrir a planilha naquele ponto.</div>
+</div>

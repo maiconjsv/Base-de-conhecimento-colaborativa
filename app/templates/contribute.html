@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Como contribuir{% endblock %}
+{% block content %}
+<div class="contrib">
+  <div class="page-header">
+    <h1 class="h4">Suporte e contribuição</h1>
+    <a class="small" href="{{ github_repo }}" target="_blank" rel="noopener">Repositório no GitHub</a>
+  </div>
+
+  <div class="contrib-cards mb-4">
+    <div class="contrib-card">
+      <h2>Precisa de ajuda?</h2>
+      <p>Erro, dúvida de uso ou algo que não funcionou como esperado.</p>
+      <a class="btn btn-sm btn-primary"
+         href="mailto:{{ support_email }}?subject={{ 'Suporte - Base de Conhecimento' | urlencode }}">
+        Escrever para {{ support_email }}</a>
+    </div>
+    <div class="contrib-card">
+      <h2>Tem uma ideia?</h2>
+      <p>Não precisa programar: descreva a funcionalidade numa issue ou por e-mail.</p>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ github_repo }}/issues/new"
+         target="_blank" rel="noopener">Sugerir no GitHub</a>
+    </div>
+    <div class="contrib-card">
+      <h2>Quer programar?</h2>
+      <p>Siga o passo a passo abaixo e envie um Pull Request para revisão.</p>
+      <a class="btn btn-sm btn-outline-secondary" href="#passo-a-passo">Ver passo a passo</a>
+    </div>
+  </div>
+
+  <div class="card"><div class="card-body">
+    <h2 class="h5 mb-3" id="passo-a-passo">Passo a passo para contribuir com uma feature</h2>
+    <ol class="contrib-steps">
+      <li class="contrib-step">
+        <h3>Abra uma issue descrevendo a ideia</h3>
+        <p>Em <a href="{{ github_repo }}/issues/new" target="_blank" rel="noopener">Issues › New issue</a>,
+          explique qual problema a feature resolve, como deveria funcionar e, se possível, um exemplo.
+          Para mudanças grandes, espere um retorno de <strong>@{{ github_user }}</strong> antes de começar,
+          para alinhar a abordagem.</p>
+      </li>
+
+      <li class="contrib-step">
+        <h3>Faça um fork e clone</h3>
+        <p>No GitHub, clique em <strong>Fork</strong> no repositório. Depois, na sua máquina:</p>
+<pre><code>git clone https://github.com/SEU-USUARIO/Base-de-conhecimento-colaborativa.git
+cd Base-de-conhecimento-colaborativa
+git remote add upstream {{ github_repo }}.git</code></pre>
+      </li>
+
+      <li class="contrib-step">
+        <h3>Prepare o ambiente (Windows, Python 3.12)</h3>
+<pre><code>python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe run.py</code></pre>
+        <p>Abra <code>http://127.0.0.1:5000</code>. No primeiro acesso o sistema pede para criar o
+          usuário administrador. Os dados de desenvolvimento ficam em <code>instance\</code> e
+          <code>uploads\</code>, separados da sua instalação real.</p>
+      </li>
+
+      <li class="contrib-step">
+        <h3>Crie uma branch para a feature</h3>
+<pre><code>git checkout -b feature/nome-curto-da-feature</code></pre>
+      </li>
+
+      <li class="contrib-step">
+        <h3>Implemente seguindo o padrão do projeto</h3>
+        <p>Onde fica cada coisa: rotas em <code>app/documents/</code>, busca em <code>app/search.py</code>,
+          assistente em <code>app/ask.py</code>, planilhas em <code>app/sheets.py</code>, extração de texto em
+          <code>app/extract.py</code>, telas em <code>app/templates/</code> e visual em
+          <code>app/static/style.css</code>. O <code>README.md</code> descreve a arquitetura.</p>
+        <p>Regras importantes:</p>
+        <ul>
+          <li>Tudo roda <strong>localmente, dentro do executável</strong>: nada de serviços externos ou envio de dados para fora.</li>
+          <li>Textos da interface em português.</li>
+          <li>Dependência nova vai no <code>requirements.txt</code>, com versão fixa, e precisa funcionar no build.</li>
+          <li>Mudou o banco de dados? Lembre que quem já usa o programa tem dados: só tabelas novas são criadas automaticamente.</li>
+        </ul>
+      </li>
+
+      <li class="contrib-step">
+        <h3>Teste</h3>
+        <p>Envie alguns arquivos (PDF, Word, Excel), faça buscas, use o <strong>Perguntar</strong> e abra
+          os documentos. Se mexeu em dependências ou no empacotamento, gere o programa e abra o
+          executável:</p>
+<pre><code>.\build.ps1
+.\dist\BaseConhecimento\BaseConhecimento.exe</code></pre>
+      </li>
+
+      <li class="contrib-step">
+        <h3>Faça commit e envie</h3>
+<pre><code>git fetch upstream
+git rebase upstream/main
+git add -A
+git commit -m "Adiciona &lt;descrição curta da feature&gt;"
+git push -u origin feature/nome-curto-da-feature</code></pre>
+      </li>
+
+      <li class="contrib-step">
+        <h3>Abra o Pull Request</h3>
+        <p>No seu fork, clique em <strong>Compare &amp; pull request</strong>, com destino à branch
+          <code>main</code> de <a href="{{ github_repo }}" target="_blank" rel="noopener">{{ github_user }}/Base-de-conhecimento-colaborativa</a>.
+          Descreva o que muda, como testar e inclua prints de tela. Escreva <code>Closes #N</code> para
+          ligar à issue. A revisão é feita por <strong>@{{ github_user }}</strong>.</p>
+      </li>
+    </ol>
+  </div></div>
+
+  <p class="text-muted small mt-3">
+    Dúvidas sobre como contribuir? Escreva para
+    <a href="mailto:{{ support_email }}?subject={{ 'Contribuição - Base de Conhecimento' | urlencode }}">{{ support_email }}</a>.
+  </p>
+</div>
+{% endblock %}

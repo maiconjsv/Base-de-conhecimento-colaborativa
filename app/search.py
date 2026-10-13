@@ -89,3 +89,99 @@ def search_documents(raw_query: str, page: int = 1, page_size: int = 10):
         if r.doc_id in docs
     ]
     return items, total
+
+
+# --------------------------------------------------------------------------- #
+# Cruzamento entre pesquisas (abas da tela "Pesquisas")
+# --------------------------------------------------------------------------- #
+CROSS_OPS = ("and", "or", "not")
+MAX_CROSS_QUERIES = 8
+
+
+def ranked_ids(raw_query: str) -> list[int]:
+    """Todos os documentos que casam com a pesquisa, do mais ao menos relevante."""
+    match = build_match_query(raw_query)
+    if not match:
+        return []
+    rows = db.session.execute(
+        text(
+            """
+            SELECT rowid FROM document_fts
+            WHERE document_fts MATCH :m
+            ORDER BY bm25(document_fts, 8.0, 4.0, 6.0, 1.0)
+            """
+        ),
+        {"m": match},
+    )
+    return [r[0] for r in rows]
+
+
+def _best_cross_snippet(snippets: list[str], regexes) -> str:
+    """O trecho que reune termos de mais pesquisas diferentes (empate: o primeiro)."""
+    best, best_n = "", -1
+    for snip in snippets:
+        plain = re.sub(r"<[^>]+>", "", snip)
+        n = sum(1 for rx in regexes if rx is not None and rx.search(plain))
+        if n > best_n:
+            best, best_n = snip, n
+    return best
+
+
+def cross_documents(queries: list[str], op: str, *, base: int = 0, page: int = 1, page_size: int = 20):
+    """Combina os resultados de varias pesquisas.
+
+    op = "and": documentos presentes em TODAS as pesquisas;
+         "or":  em QUALQUER uma (os que aparecem em mais pesquisas primeiro);
+         "not": na pesquisa `base` e em NENHUMA das outras.
+
+    Devolve (items, total). Cada item: {document, matches: [bool por pesquisa],
+    hits: [ocorrencias por pesquisa], snippet}.
+    """
+    from .locator import find_snippets
+
+    if op not in CROSS_OPS:
+        raise ValueError(op)
+    queries = queries[:MAX_CROSS_QUERIES]
+    lists = [ranked_ids(q) for q in queries]
+    sets = [set(ids) for ids in lists]
+    # posicao no ranking de cada pesquisa (quem nao aparece fica no fim)
+    pos = [{doc_id: i for i, doc_id in enumerate(ids)} for ids in lists]
+
+    def rank_sum(doc_id):
+        return sum(p.get(doc_id, len(p) + 1) for p in pos)
+
+    if op == "and":
+        ids = set.intersection(*sets) if sets else set()
+        ordered = sorted(ids, key=rank_sum)
+    elif op == "or":
+        ids = set.union(*sets) if sets else set()
+        ordered = sorted(ids, key=lambda d: (-sum(d in s for s in sets), rank_sum(d)))
+    else:
+        base = min(max(base, 0), len(sets) - 1) if sets else 0
+        others = set().union(*(s for i, s in enumerate(sets) if i != base))
+        ordered = [d for d in lists[base] if d not in others] if sets else []
+
+    total = len(ordered)
+    page = max(page, 1)
+    chunk = ordered[(page - 1) * page_size: page * page_size]
+    if not chunk:
+        return [], total
+
+    docs = {d.id: d for d in Document.query.filter(Document.id.in_(chunk)).all()}
+    regexes = [compile_terms(tokenize(q)) for q in queries]
+    all_re = compile_terms([t for q in queries for t in tokenize(q)])
+    items = []
+    for doc_id in chunk:
+        doc = docs.get(doc_id)
+        if doc is None:
+            continue
+        snippets, _ = find_snippets(doc.content or doc.description, all_re, max_hits=60)
+        items.append(
+            {
+                "document": doc,
+                "matches": [doc_id in s for s in sets],
+                "hits": [_hit_count(doc, rx) for rx in regexes],
+                "snippet": _best_cross_snippet(snippets, regexes),
+            }
+        )
+    return items, total

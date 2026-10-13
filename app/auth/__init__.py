@@ -17,13 +17,13 @@ def _has_users() -> bool:
 def _safe_next(target: str | None) -> str:
     if target and not urlparse(target).netloc and target.startswith("/"):
         return target
-    return url_for("documents.index")
+    return url_for("documents.shell")
 
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("documents.index"))
+        return redirect(url_for("documents.shell"))
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data.strip()).first()
@@ -38,7 +38,7 @@ def login():
 @bp.route("/register", methods=["GET", "POST"])
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for("documents.index"))
+        return redirect(url_for("documents.shell"))
     form = RegisterForm()
     if form.validate_on_submit():
         username = form.username.data.strip()
@@ -51,7 +51,7 @@ def register():
             db.session.commit()
             login_user(user)
             flash("Conta criada. Bem-vindo!", "success")
-            return redirect(url_for("documents.index"))
+            return redirect(url_for("documents.shell"))
     return render_template("auth/register.html", form=form)
 
 
@@ -68,7 +68,7 @@ def setup():
         db.session.commit()
         login_user(user)
         flash("Administrador criado. A base de conhecimento está pronta para uso.", "success")
-        return redirect(url_for("documents.index"))
+        return redirect(url_for("documents.shell"))
     return render_template("auth/setup.html", form=form)
 
 

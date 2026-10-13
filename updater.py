@@ -13,6 +13,9 @@ O que ele faz:
   versao nova, que vem embutida neste executavel.
 - NUNCA toca em "dados\\", ".env" nem "secret.key".
 - Se algo falhar no meio da troca, desfaz o que ja tinha mexido.
+- Depois que a versao nova esta no lugar, apagar os arquivos antigos e so
+  "faxina": se o Windows/OneDrive segurar algum arquivo, ele fica para tras e e
+  apagado na proxima atualizacao, sem desfazer nada.
 - No fim, reabre o programa.
 
 A versao nova vem embutida aqui como "payload.zip" (gerado pelo build.ps1).
@@ -21,6 +24,7 @@ A versao nova vem embutida aqui como "payload.zip" (gerado pelo build.ps1).
 import ctypes
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -35,6 +39,7 @@ VERSION_FILE = "versao.txt"
 
 # Nunca substituidos nem apagados pela atualizacao.
 PRESERVE = {"dados", ".env", "secret.key", "_backup", "_update_tmp"}
+STAGING_PREFIX = "_update_tmp"
 KEEP_BACKUPS = 2
 
 MB_OK = 0x40
@@ -104,6 +109,47 @@ def retry(fn, *, tries: int = 12, delay: float = 0.5):
             time.sleep(delay)
     if last:
         raise last
+
+
+def _clear_readonly(func, path, _exc):
+    """onexc do rmtree: tira o 'somente leitura' e tenta de novo."""
+    try:
+        os.chmod(path, stat.S_IWRITE)
+    except OSError:
+        pass
+    func(path)
+
+
+def remove_path(path: Path, *, tries: int = 20, delay: float = 0.5) -> bool:
+    """Apaga arquivo/pasta insistindo (OneDrive e antivirus seguram arquivos
+    recem-mexidos por alguns segundos). Devolve False se nao conseguiu."""
+    for _ in range(tries):
+        if not os.path.lexists(path):
+            return True
+        try:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path, onexc=_clear_readonly)
+            else:
+                try:
+                    os.chmod(path, stat.S_IWRITE)
+                except OSError:
+                    pass
+                path.unlink()
+            return True
+        except OSError:
+            time.sleep(delay)
+    return not os.path.lexists(path)
+
+
+def sweep_leftovers(root: Path) -> None:
+    """Faxina de tentativas anteriores: *.old, *.old-*, *.falhou-*, _update_tmp*."""
+    for item in root.iterdir():
+        n = item.name
+        if n.endswith(".old") or ".old-" in n or ".falhou-" in n or n.startswith(STAGING_PREFIX):
+            if remove_path(item, tries=4):
+                log(f"  removido resto de atualizacao anterior: {n}")
+            else:
+                log(f"  (nao consegui remover '{n}' agora; fica para a proxima)")
 
 
 # --------------------------------------------------------------------------- #
@@ -177,45 +223,57 @@ def backup_data(root: Path) -> Path | None:
 # --------------------------------------------------------------------------- #
 # Troca dos arquivos do programa
 # --------------------------------------------------------------------------- #
-def apply_update(root: Path, staging: Path) -> None:
+def apply_update(root: Path, staging: Path) -> list[str]:
     """Move cada item de 'staging' para 'root', preservando os dados.
 
-    Faz rollback se algo falhar no meio.
+    Fase 1 (troca): cada item atual vira '<nome>.old-<stamp>' e o novo entra no
+    lugar. Se algo falhar aqui, desfaz tudo e levanta o erro.
+    Fase 2 (faxina): apaga os '.old-*'. Falha aqui NAO desfaz nada: a versao nova
+    ja esta completa; o que sobrar e apagado na proxima atualizacao.
+
+    Devolve os nomes que nao deu para apagar na faxina.
     """
-    moves: list[tuple[Path, Path]] = []  # (destino, .old)
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    moves: list[tuple[Path, Path | None]] = []  # (destino, antigo renomeado ou None)
     try:
         for item in sorted(staging.iterdir()):
             name = item.name
             if name in PRESERVE:
                 continue
             dest = root / name
-            old = root / f"{name}.old"
-
-            if old.exists():
-                retry(lambda o=old: shutil.rmtree(o) if o.is_dir() else o.unlink())
-            if dest.exists():
+            old = None
+            if os.path.lexists(dest):
+                old = root / f"{name}.old-{stamp}"
                 retry(lambda d=dest, o=old: os.rename(d, o))
-                moves.append((dest, old))
-
+            moves.append((dest, old))
             retry(lambda s=item, d=dest: shutil.move(str(s), str(d)))
             log(f"  atualizado: {name}")
-
-        for _dest, old in moves:  # sucesso: descarta os antigos
-            retry(lambda o=old: shutil.rmtree(o) if o.is_dir() else o.unlink())
-
     except Exception:
         log("  ERRO durante a troca - desfazendo...")
-        for dest, old in moves:
-            try:
-                if dest.exists():
-                    if dest.is_dir():
-                        shutil.rmtree(dest, ignore_errors=True)
-                    else:
-                        dest.unlink()
-                os.rename(old, dest)
-            except OSError:
-                pass
+        rollback(root, moves, stamp)
         raise
+
+    # ---- fase 2: faxina (a atualizacao ja deu certo)
+    leftovers = []
+    for _dest, old in moves:
+        if old is not None and not remove_path(old):
+            leftovers.append(old.name)
+            log(f"  (nao consegui apagar '{old.name}' agora; sera apagado na proxima atualizacao)")
+    return leftovers
+
+
+def rollback(root: Path, moves, stamp: str) -> None:
+    """Desfaz a fase 1: tira o item novo do caminho e devolve o antigo."""
+    for dest, old in reversed(moves):
+        try:
+            if os.path.lexists(dest):
+                failed = root / f"{dest.name}.falhou-{stamp}"
+                retry(lambda d=dest, f=failed: os.rename(d, f))
+                remove_path(failed, tries=4)
+            if old is not None:
+                retry(lambda o=old, d=dest: os.rename(o, d))
+        except OSError as exc:
+            log(f"  !! nao consegui restaurar '{dest.name}': {exc}")
 
 
 def relaunch(root: Path) -> None:
@@ -237,7 +295,9 @@ def main() -> None:
     root = install_dir()
     log(f"Pasta do programa: {root}")
 
-    if not (root / APP_EXE).exists():
+    # sem o .exe mas com a pasta de dados: instalacao que ficou pela metade,
+    # o atualizador consegue recolocar o programa
+    if not (root / APP_EXE).exists() and not (root / "dados").is_dir():
         msgbox(
             "Este atualizador precisa estar DENTRO da pasta do programa.\n\n"
             f"Copie '{Path(sys.executable).name}' para a mesma pasta onde esta "
@@ -253,8 +313,10 @@ def main() -> None:
                MB_ICONERROR)
         pause_and_exit(1)
 
-    staging = root / "_update_tmp"
-    shutil.rmtree(staging, ignore_errors=True)
+    log("\nLimpando restos de atualizacoes anteriores...")
+    sweep_leftovers(root)
+
+    staging = root / f"{STAGING_PREFIX}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     staging.mkdir()
 
     log("\n[1/4] Abrindo a versao nova...")
@@ -293,18 +355,23 @@ def main() -> None:
     try:
         apply_update(root, staging)
     except OSError as exc:
+        if "onedrive" in str(root).lower():
+            hint = ("O programa esta numa pasta do OneDrive, que trava arquivos enquanto "
+                    "sincroniza. Tente de novo em alguns minutos, ou mova a pasta para "
+                    "fora do OneDrive (ex.: 'C:\\BaseConhecimento').")
+        else:
+            hint = ("Se o programa estiver instalado em 'C:\\Program Files', mova a pasta "
+                    "para outro lugar (ex.: 'C:\\BaseConhecimento') ou rode este "
+                    "atualizador como administrador.")
         msgbox(
             f"A atualizacao falhou e foi desfeita.\n\n{exc}\n\n"
-            "Seus dados estao intactos. Se o programa estiver instalado em "
-            "'C:\\Program Files', mova a pasta para outro lugar (ex.: "
-            "'C:\\BaseConhecimento') ou rode este atualizador como "
-            "administrador.",
+            f"Seus dados estao intactos. {hint}",
             MB_ICONERROR,
         )
-        shutil.rmtree(staging, ignore_errors=True)
+        remove_path(staging, tries=4)
         pause_and_exit(1)
 
-    shutil.rmtree(staging, ignore_errors=True)
+    remove_path(staging, tries=4)
 
     log("\nPronto! Reabrindo o programa...")
     relaunch(root)

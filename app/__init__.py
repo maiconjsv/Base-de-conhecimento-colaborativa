@@ -58,10 +58,18 @@ def create_app(config_class: type = Config) -> Flask:
     app.register_blueprint(documents_bp)
     register_error_handlers(app)
 
+    @app.context_processor
+    def _inject_contact():
+        return {
+            "support_email": app.config["SUPPORT_EMAIL"],
+            "github_user": app.config["GITHUB_USER"],
+            "github_repo": app.config["GITHUB_REPO"],
+        }
+
     @app.before_request
     def _require_first_admin():
         # Primeiro uso: sem nenhum usuario cadastrado, tudo leva para /setup.
-        if request.endpoint in ("auth.setup", "static") or request.endpoint is None:
+        if request.endpoint in ("auth.setup", "static", "documents.contribute") or request.endpoint is None:
             return None
         try:
             has_user = db.session.query(User.id).first() is not None
@@ -79,8 +87,13 @@ def _register_cli(app: Flask) -> None:
     @app.cli.command("init-db")
     def init_db() -> None:
         """Cria as tabelas, o indice FTS5 e os triggers."""
+        from .dedup import backfill_fingerprints
+        from .sheets import backfill_sheets
+
         db.create_all()
         create_fts(db.session)
+        backfill_sheets()
+        backfill_fingerprints()
         click.echo("Banco e indice de busca prontos.")
 
     @app.cli.command("create-user")

@@ -1,0 +1,57 @@
+{# Grade da pseudoplanilha: fonte, linhas e paginacao.
+   Incluido pela pagina do documento (pseudoplanilha). Precisa de: doc, cur, sv. #}
+<div class="sheet-grid-frag" data-total="{{ sv.total }}" data-page="{{ sv.page }}" data-pages="{{ sv.pages }}">
+  <div class="sheet-source">
+    Fonte: <strong>{{ doc.original_filename }}</strong> › aba <strong>{{ cur.name }}</strong>
+    {% if sv.total %}
+      · linhas {{ sv.first }}–{{ sv.last }}
+      · {{ sv.total }} {{ 'linha' if sv.total == 1 else 'linhas' }}{% if sv.filter %} com “{{ sv.filter }}”{% endif %}
+    {% endif %}
+    {% if cur.truncated %}<span class="text-warning">· aba muito grande, só as primeiras linhas foram lidas</span>{% endif %}
+  </div>
+
+  {% if sv.rows %}
+  <div class="sheet-grid-wrap">
+    <table class="sheet-grid">
+      <thead>
+        <tr class="sheet-grid__letters">
+          <th class="sheet-grid__corner"></th>
+          {% for letter in sv.letters %}<th>{{ letter }}</th>{% endfor %}
+        </tr>
+        {% if cur.header_row %}
+        <tr class="sheet-grid__header">
+          <th class="sheet-grid__rownum">{{ cur.header_row }}</th>
+          {% for name in sv.header %}<th>{{ name }}</th>{% endfor %}
+        </tr>
+        {% endif %}
+      </thead>
+      <tbody>
+        {% for row in sv.rows %}
+        <tr id="r{{ row.number }}" class="{{ 'is-target' if row.number == sv.target else '' }}">
+          <th class="sheet-grid__rownum">{{ row.number }}</th>
+          {% for cell in row.cells %}<td>{{ cell }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="text-muted mb-0 mt-2">
+      {% if sv.filter %}Nenhuma linha desta aba menciona “{{ sv.filter }}”.{% else %}Aba vazia.{% endif %}
+    </p>
+  {% endif %}
+
+  {% if sv.pages > 1 %}
+  <nav class="sheet-pager">
+    {% if sv.page > 1 %}
+      <a class="btn btn-sm btn-outline-secondary" data-page="{{ sv.page - 1 }}"
+         href="{{ url_for('documents.detail', doc_id=doc.id, sheet=cur.id, f=sv.filter or None, page=sv.page - 1) }}">‹ Anteriores</a>
+    {% endif %}
+    <span class="small text-muted">página {{ sv.page }} de {{ sv.pages }}</span>
+    {% if sv.page < sv.pages %}
+      <a class="btn btn-sm btn-outline-secondary" data-page="{{ sv.page + 1 }}"
+         href="{{ url_for('documents.detail', doc_id=doc.id, sheet=cur.id, f=sv.filter or None, page=sv.page + 1) }}">Próximas ›</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+</div>

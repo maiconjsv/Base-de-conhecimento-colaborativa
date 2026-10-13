@@ -9,10 +9,25 @@ from flask import current_app
 from werkzeug.utils import secure_filename
 
 from ..db import db
+from ..dedup import (
+    DuplicateDocument,
+    check_file,
+    check_text,
+    file_sha256,
+    store_fingerprint,
+    text_sha256,
+)
 from ..extract import extract_doc_meta, extract_text
 from ..images import extract_images
 from ..models import Document, DocumentImage
-from .analyze import derive_metadata
+from ..sheets import (
+    clear_sheets,
+    describe_sheets,
+    extract_spreadsheet,
+    is_spreadsheet,
+    store_sheets,
+)
+from .analyze import derive_metadata, humanize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +44,20 @@ def _image_dir() -> Path:
     return Path(current_app.config["IMAGE_DIR"])
 
 
+def _extract(path: Path, ext: str):
+    """(texto, ok, abas). Planilha e lida uma vez so: texto e linhas saem juntos."""
+    if is_spreadsheet(ext):
+        return extract_spreadsheet(path, ext)
+    text, ok = extract_text(path, ext)
+    return text, ok, None
+
+
 def ingest_file(file_storage, *, user_id: int) -> Document:
-    """Salva o arquivo e monta o registro extraindo tudo automaticamente."""
+    """Salva o arquivo e monta o registro extraindo tudo automaticamente.
+
+    Levanta `DuplicateDocument` (sem gravar nada) se o arquivo, ou o texto dele,
+    ja existir na base.
+    """
     original = secure_filename(file_storage.filename) or "arquivo"
     ext = _ext(original)
     stored = f"{uuid.uuid4().hex}.{ext}" if ext else uuid.uuid4().hex
@@ -39,9 +66,21 @@ def ingest_file(file_storage, *, user_id: int) -> Document:
     file_storage.save(dest)
     size = dest.stat().st_size
 
-    text, ok = extract_text(dest, ext)
+    try:
+        file_hash = check_file(dest)
+        text, ok, sheets = _extract(dest, ext)
+        text_hash = check_text(text) if ok else ""
+    except DuplicateDocument:
+        dest.unlink(missing_ok=True)
+        raise
     embedded = extract_doc_meta(dest, ext)
     meta = derive_metadata(original_filename=original, text=text, embedded=embedded)
+    if sheets is not None:
+        # o texto de planilha comeca pelo nome da aba ("Planilha1"), que nao e titulo
+        if not embedded.get("title"):
+            meta["title"] = humanize_filename(original)
+        if not embedded.get("summary"):
+            meta["description"] = describe_sheets(sheets)
 
     doc = Document(
         title=meta["title"],
@@ -57,8 +96,11 @@ def ingest_file(file_storage, *, user_id: int) -> Document:
     )
     db.session.add(doc)
     db.session.flush()  # garante doc.id para as imagens
+    store_fingerprint(doc, file_hash=file_hash, text_hash=text_hash)
 
     n_images = _store_images(doc, dest, ext)
+    if sheets is not None:
+        store_sheets(doc, sheets)
     db.session.commit()
     logger.info(
         "Documento %s salvo: titulo=%r, %d chars, %d imagem(ns), extraction_ok=%s",
@@ -121,9 +163,14 @@ def reprocess_document(doc: Document) -> None:
         logger.warning("Arquivo ausente para documento %s: %s", doc.id, path)
         return
     ext = _ext(doc.stored_filename)
-    text, ok = extract_text(path, ext)
+    text, ok, sheets = _extract(path, ext)
     doc.content = text
     doc.extraction_ok = ok
+    store_fingerprint(doc, file_hash=file_sha256(path), text_hash=text_sha256(text) if ok else "")
+    if sheets is not None:
+        store_sheets(doc, sheets)
+    else:
+        clear_sheets(doc)
 
     _remove_image_files(list(doc.images))
     doc.images.clear()

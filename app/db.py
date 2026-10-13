@@ -43,6 +43,31 @@ _FTS_SCHEMA = [
         VALUES (new.id, new.title, new.description, new.tags, new.content);
     END;
     """,
+    # Linhas de planilha: indice proprio, para achar a linha exata sem varrer tudo
+    """
+    CREATE VIRTUAL TABLE IF NOT EXISTS sheet_row_fts USING fts5(
+        text,
+        content='sheet_row',
+        content_rowid='id',
+        tokenize="unicode61 remove_diacritics 2"
+    );
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS sheet_row_ai AFTER INSERT ON sheet_row BEGIN
+        INSERT INTO sheet_row_fts(rowid, text) VALUES (new.id, new.text);
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS sheet_row_ad AFTER DELETE ON sheet_row BEGIN
+        INSERT INTO sheet_row_fts(sheet_row_fts, rowid, text) VALUES ('delete', old.id, old.text);
+    END;
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS sheet_row_au AFTER UPDATE ON sheet_row BEGIN
+        INSERT INTO sheet_row_fts(sheet_row_fts, rowid, text) VALUES ('delete', old.id, old.text);
+        INSERT INTO sheet_row_fts(rowid, text) VALUES (new.id, new.text);
+    END;
+    """,
 ]
 
 
@@ -69,5 +94,8 @@ def rebuild_fts(session):
     """Reconstroi o indice a partir do conteudo atual da tabela `document`."""
     session.execute(
         text("INSERT INTO document_fts(document_fts) VALUES ('rebuild')")
+    )
+    session.execute(
+        text("INSERT INTO sheet_row_fts(sheet_row_fts) VALUES ('rebuild')")
     )
     session.commit()

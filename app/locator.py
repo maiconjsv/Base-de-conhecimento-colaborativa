@@ -98,27 +98,34 @@ def find_snippets(text, term_re, *, ctx=90, max_hits=200, join_gap=20):
         else:
             windows.append([ws, we, [(s, e)]])
 
-    out = []
-    for ws, we, marks in windows:
-        while ws > 0 and _WORD_RE.match(text[ws - 1]):
-            ws -= 1
-        while we < n and _WORD_RE.match(text[we]):
-            we += 1
+    return [render_window(text, ws, we, marks) for ws, we, marks in windows], total
 
-        buf, cur = [], ws
-        for s, e in marks:
-            buf.append(escape(text[cur:s]))
-            buf.append("<mark>")
-            buf.append(escape(text[s:e]))
-            buf.append("</mark>")
-            cur = e
-        buf.append(escape(text[cur:we]))
 
-        frag = re.sub(r"\s+", " ", "".join(buf)).strip()
-        if ws > 0:
-            frag = "… " + frag
-        if we < n:
-            frag = frag + " …"
-        out.append(frag)
+def render_window(text, ws, we, marks):
+    """HTML escapado de text[ws:we] com <mark> nos spans `marks` (ordenados).
 
-    return out, total
+    As bordas sao estendidas ate o fim da palavra para nao cortar no meio.
+    """
+    n = len(text)
+    while ws > 0 and _WORD_RE.match(text[ws - 1]):
+        ws -= 1
+    while we < n and _WORD_RE.match(text[we]):
+        we += 1
+
+    buf, cur = [], ws
+    for s, e in marks:
+        if s < cur or e > we:
+            continue
+        buf.append(escape(text[cur:s]))
+        buf.append("<mark>")
+        buf.append(escape(text[s:e]))
+        buf.append("</mark>")
+        cur = e
+    buf.append(escape(text[cur:we]))
+
+    frag = re.sub(r"\s+", " ", "".join(buf)).strip()
+    if ws > 0:
+        frag = "… " + frag
+    if we < n:
+        frag = frag + " …"
+    return frag

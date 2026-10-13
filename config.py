@@ -67,12 +67,17 @@ class Config:
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Contato do mantenedor (rodape e pagina "Como contribuir")
+    SUPPORT_EMAIL = "maicon.vieira@atos.ai"
+    GITHUB_USER = "maiconjsv"
+    GITHUB_REPO = "https://github.com/maiconjsv/Base-de-conhecimento-colaborativa"
+
     # Tamanho maximo do envio (somando todos os arquivos): 50 MB
     MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", 50 * 1024 * 1024))
 
     ALLOWED_EXTENSIONS = {
         "pdf", "doc", "docx", "txt", "md", "markdown",
-        "xls", "xlsx", "ppt", "pptx", "csv",
+        "xls", "xlsx", "xlsm", "ppt", "pptx", "csv",
     }
 
     # Resultados por pagina na busca

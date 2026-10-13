@@ -24,6 +24,17 @@ if ($Clean) {
     Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
 }
 
+# O build recria dist\BaseConhecimento do zero. Se o programa gerado antes estiver
+# aberto (testando), o banco em dados\ fica travado e o PyInstaller falha: fecha antes.
+$distExe = Join-Path (Get-Location) "dist\BaseConhecimento\BaseConhecimento.exe"
+$running = Get-Process -Name BaseConhecimento -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -eq $distExe }
+if ($running) {
+    Write-Host "Fechando o BaseConhecimento.exe aberto a partir de dist\ (PID $($running.Id -join ', '))..." -ForegroundColor Yellow
+    $running | Stop-Process -Force
+    $running | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+}
+
 # PyInstaller e pip escrevem progresso no stderr; nao tratar isso como erro.
 $ErrorActionPreference = "Continue"
 
@@ -60,7 +71,11 @@ Copy-Item "$out\*" $stage -Recurse -Force
 Remove-Item -Recurse -Force "$stage\dados" -ErrorAction SilentlyContinue
 
 Remove-Item -Force "build\payload.zip" -ErrorAction SilentlyContinue
-Compress-Archive -Path "$stage\*" -DestinationPath "build\payload.zip" -Force
+# zip via Python (Compress-Archive falha se o antivirus estiver lendo um arquivo)
+& $py scripts\make_zip.py $stage "build\payload.zip"
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path "build\payload.zip")) {
+    Write-Error "Falha ao gerar build\payload.zip (exit $LASTEXITCODE)"; exit 1
+}
 
 # --------------------------------------------------------------------------- #
 # 3. O atualizador (arquivo unico, com o payload embutido)

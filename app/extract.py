@@ -42,19 +42,13 @@ def _extract_docx(path: Path) -> str:
     return "\n".join(parts)
 
 
-def _extract_xlsx(path: Path) -> str:
-    from openpyxl import load_workbook
+def _extract_spreadsheet(ext: str):
+    def handler(path: Path) -> str:
+        from .sheets import read_sheets, sheets_to_text
 
-    wb = load_workbook(str(path), read_only=True, data_only=True)
-    parts = []
-    for ws in wb.worksheets:
-        parts.append(f"# {ws.title}")
-        for row in ws.iter_rows(values_only=True):
-            cells = [str(c) for c in row if c is not None]
-            if cells:
-                parts.append("\t".join(cells))
-    wb.close()
-    return "\n".join(parts)
+        return sheets_to_text(read_sheets(path, ext))
+
+    return handler
 
 
 def _extract_pptx(path: Path) -> str:
@@ -75,7 +69,9 @@ def _extract_pptx(path: Path) -> str:
 _HANDLERS = {
     "pdf": _extract_pdf,
     "docx": _extract_docx,
-    "xlsx": _extract_xlsx,
+    "xlsx": _extract_spreadsheet("xlsx"),
+    "xlsm": _extract_spreadsheet("xlsm"),
+    "xls": _extract_spreadsheet("xls"),
     "pptx": _extract_pptx,
 }
 
@@ -148,6 +144,7 @@ _META_HANDLERS = {
     "pdf": _meta_pdf,
     "docx": _meta_docx,
     "xlsx": _meta_xlsx,
+    "xlsm": _meta_xlsx,
     "pptx": _meta_pptx,
 }
 

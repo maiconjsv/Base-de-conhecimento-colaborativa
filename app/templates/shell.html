@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Base de Conhecimento{% endblock %}
+{% block body_class %}shell{% endblock %}
+{% block main %}
+<script>
+  /* A moldura nunca deve abrir dentro de uma aba (ex.: link para "/" de dentro da aba). */
+  if (window.top !== window.self) location.replace("{{ url_for('documents.index') }}");
+</script>
+<div class="tabstrip" id="tabstrip">
+  <div class="tabstrip__tabs" id="tabs" role="tablist" aria-label="Abas abertas"></div>
+  <button type="button" class="tabstrip__add" id="tab-add" title="Nova aba" aria-label="Nova aba">+</button>
+</div>
+<div class="tabframes" id="frames"
+     data-home="{{ url_for('documents.index') }}"
+     data-search="{{ url_for('documents.search') }}"
+     data-shell="{{ url_for('documents.shell') }}"></div>
+<script src="{{ url_for('static', filename='tabs.js') }}"></script>
+{% endblock %}
+{% block footer %}{% endblock %}

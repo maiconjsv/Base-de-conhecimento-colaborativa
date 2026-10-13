@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from flask_login import UserMixin
@@ -56,6 +57,21 @@ class Document(db.Model):
         order_by="DocumentImage.ordinal",
         lazy="selectin",
     )
+    # Impressao digital para detectar duplicados (apagada pelo banco junto)
+    fingerprint = db.relationship(
+        "DocumentFingerprint",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    # Planilhas: abas estruturadas (linhas ficam em SheetRow, apagadas pelo banco)
+    sheets = db.relationship(
+        "DocumentSheet",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="DocumentSheet.ordinal",
+    )
 
     @property
     def tag_list(self):
@@ -98,3 +114,86 @@ class DocumentImage(db.Model):
 
     def __repr__(self) -> str:
         return f"<DocumentImage {self.id} doc={self.document_id}>"
+
+
+class DocumentSheet(db.Model):
+    """Uma aba de planilha (XLSX/XLSM/XLS/CSV) com o cabecalho detectado."""
+
+    __tablename__ = "document_sheet"
+
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("document.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    ordinal = db.Column(db.Integer, default=0, nullable=False)
+    name = db.Column(db.String(255), nullable=False)
+    header = db.Column(db.Text, default="[]", nullable=False)  # JSON: lista de nomes
+    header_row = db.Column(db.Integer, default=0, nullable=False)  # 0 = sem cabecalho
+    col_offset = db.Column(db.Integer, default=0, nullable=False)  # 1a coluna usada (0 = A)
+    n_cols = db.Column(db.Integer, default=0, nullable=False)
+    n_rows = db.Column(db.Integer, default=0, nullable=False)
+    truncated = db.Column(db.Boolean, default=False, nullable=False)
+
+    document = db.relationship("Document", back_populates="sheets")
+
+    @property
+    def header_list(self) -> list[str]:
+        return json.loads(self.header or "[]")
+
+    @property
+    def column_letters(self) -> list[str]:
+        from .sheets import column_letter
+
+        return [column_letter(self.col_offset + i) for i in range(self.n_cols)]
+
+    def __repr__(self) -> str:
+        return f"<DocumentSheet {self.id} doc={self.document_id} {self.name!r}>"
+
+
+class SheetRow(db.Model):
+    """Linha de uma aba. `row_number` e o numero da linha no arquivo original."""
+
+    __tablename__ = "sheet_row"
+    __table_args__ = (db.Index("ix_sheet_row_sheet_number", "sheet_id", "row_number"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    sheet_id = db.Column(
+        db.Integer,
+        db.ForeignKey("document_sheet.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("document.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    row_number = db.Column(db.Integer, nullable=False)
+    cells = db.Column(db.Text, default="[]", nullable=False)  # JSON: lista de textos
+    text = db.Column(db.Text, default="", nullable=False)  # celulas unidas, para busca
+
+    @property
+    def cell_list(self) -> list[str]:
+        return json.loads(self.cells or "[]")
+
+
+class DocumentFingerprint(db.Model):
+    """Impressoes digitais de um documento, para detectar envios duplicados.
+
+    `file_sha256`: bytes do arquivo (copia identica).
+    `text_sha256`: texto extraido normalizado (mesmo conteudo salvo/exportado de
+    novo). Vazio quando o texto e curto demais para comparar com seguranca.
+    """
+
+    __tablename__ = "document_fingerprint"
+
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("document.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    file_sha256 = db.Column(db.String(64), nullable=False, index=True)
+    text_sha256 = db.Column(db.String(64), default="", nullable=False, index=True)

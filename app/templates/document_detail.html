@@ -14,7 +14,7 @@
   </div>
   <div class="d-flex gap-2">
     <a class="btn btn-outline-secondary" href="{{ url_for('documents.raw', doc_id=doc.id) }}"
-       target="_blank" rel="noopener">Abrir em nova aba</a>
+       target="_blank" rel="noopener" data-newtab>Abrir em nova aba</a>
     <a class="btn btn-primary" href="{{ url_for('documents.download', doc_id=doc.id) }}">Baixar</a>
     <form method="post" action="{{ url_for('documents.delete', doc_id=doc.id) }}"
           onsubmit="return confirm('Remover este documento definitivamente?')">
@@ -34,6 +34,34 @@
   {% if view.kind == 'pdf' %}
     <iframe class="doc-viewer" src="{{ url_for('documents.raw', doc_id=doc.id) }}"
             title="Visualização de {{ doc.title }}"></iframe>
+
+  {% elif view.kind == 'sheet' %}
+    {% set sv = sheet_view %}
+    {% set cur = sv.current %}
+    <nav class="sheet-tabs" aria-label="Abas da planilha">
+      {% for s in doc.sheets %}
+        <a class="sheet-tab {{ 'is-active' if s.id == cur.id else '' }}"
+           href="{{ url_for('documents.detail', doc_id=doc.id, sheet=s.id) }}"
+           {% if s.id == cur.id %}aria-current="page"{% endif %}>
+          {{ s.name }} <span class="sheet-tab__n">{{ s.n_rows }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+
+    <form class="sheet-toolbar" method="get" action="{{ url_for('documents.detail', doc_id=doc.id) }}">
+      <input type="hidden" name="sheet" value="{{ cur.id }}">
+      <input class="form-control form-control-sm" type="search" name="f" value="{{ sv.filter }}"
+             placeholder="Filtrar linhas desta aba por palavra-chave…">
+      <button class="btn btn-sm btn-primary" type="submit">Filtrar</button>
+      <button class="btn btn-sm btn-outline-secondary" type="submit" data-newtab
+              title="Abre o filtro numa aba nova; esta continua como está">Filtrar em nova aba</button>
+      {% if sv.filter %}
+        <a class="btn btn-sm btn-outline-secondary"
+           href="{{ url_for('documents.detail', doc_id=doc.id, sheet=cur.id) }}">Limpar</a>
+      {% endif %}
+    </form>
+
+    {% include "_sheet_grid.html" %}
 
   {% elif view.kind == 'markdown' %}
     <div class="doc-render">{{ view.html }}</div>

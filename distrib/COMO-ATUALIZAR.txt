@@ -43,3 +43,11 @@ PROBLEMAS
   ou clique com o botao direito no atualizador -> "Executar como administrador".
 - "Precisa estar DENTRO da pasta do programa": voce executou o atualizador
   de fora. Copie ele para junto do "BaseConhecimento.exe" e tente de novo.
+- Programa dentro do OneDrive (ex.: na Area de Trabalho sincronizada): o
+  OneDrive trava arquivos enquanto sincroniza. O atualizador ja insiste e,
+  se sobrar alguma pasta ".old-..." para tras, apaga na proxima atualizacao.
+  Mesmo assim, o recomendado e deixar o programa FORA do OneDrive
+  (ex.: "C:\BaseConhecimento"): alem de travar arquivos, o OneDrive pode
+  sincronizar o banco de dados enquanto o programa esta aberto.
+- Sobrou alguma pasta "_update_tmp-..." ou ".old-...": pode ignorar; a
+  proxima atualizacao remove sozinha.

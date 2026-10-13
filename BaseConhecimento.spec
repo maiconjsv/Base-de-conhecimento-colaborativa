@@ -8,6 +8,7 @@ hiddenimports = (
     + [
         "sqlalchemy.dialects.sqlite",
         "sqlalchemy.sql.default_comparator",
+        "xlrd",  # planilhas .xls antigas (importado sob demanda em app/sheets.py)
     ]
 )
 

@@ -49,10 +49,18 @@ def prepare_data_dir(data_dir: Path) -> None:
 # --------------------------------------------------------------------------- #
 def ensure_database(app) -> None:
     from app.db import create_fts, db
+    from app.dedup import backfill_fingerprints
+    from app.sheets import backfill_sheets
 
     with app.app_context():
         db.create_all()
         create_fts(db.session)
+        for backfill in (backfill_sheets, backfill_fingerprints):
+            try:
+                backfill()
+            except Exception:  # noqa: BLE001 - nao impede o programa de abrir
+                db.session.rollback()
+                logging.getLogger(__name__).exception("Falha em %s", backfill.__name__)
 
 
 # --------------------------------------------------------------------------- #

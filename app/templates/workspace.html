@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Pesquisas{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="h4">Pesquisas</h1>
+  <span class="text-muted small">Várias pesquisas abertas ao mesmo tempo. Use <strong>Cruzar</strong> para
+    combinar os resultados de abas diferentes.</span>
+</div>
+
+<div class="ws" id="ws"
+     data-api="{{ url_for('documents.workspace_search') }}"
+     data-cross="{{ url_for('documents.workspace_cross') }}"
+     data-hits="{{ url_for('documents.search') }}/hits/"
+     data-add="{{ add }}">
+  <div class="ws-bar">
+    <div class="ws-tabs" id="ws-tabs" role="tablist" aria-label="Abas de pesquisa"></div>
+    <div class="ws-bar__actions">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="ws-new">+ Pesquisa</button>
+      <button type="button" class="btn btn-sm btn-primary" id="ws-new-cross"
+              title="Combinar os resultados de duas ou mais abas">Cruzar abas</button>
+    </div>
+  </div>
+  <div class="ws-panel card" id="ws-panel" role="tabpanel"></div>
+</div>
+
+<script src="{{ url_for('static', filename='workspace.js') }}"></script>
+{% endblock %}
