@@ -34,6 +34,10 @@ MAX_SHEETS = 50
 MAX_ROWS_PER_SHEET = 20_000
 MAX_COLS = 80
 MAX_CELL_CHARS = 1_000
+# Ate este tamanho o XLSX e aberto por inteiro, o que da acesso a links e celulas
+# mescladas; acima, modo "somente leitura" (mais leve, so os valores).
+FULL_LOAD_MAX_BYTES = 25 * 1024 * 1024
+MAX_MERGE_FILL = 200_000
 _HEADER_SCAN_ROWS = 10
 
 
@@ -88,21 +92,78 @@ def _is_texty(value) -> bool:
 # --------------------------------------------------------------------------- #
 # Leitura dos formatos -> [(nome_aba, [(numero_linha, [valores crus])])]
 # --------------------------------------------------------------------------- #
+def _has_content(values) -> bool:
+    return any(v is not None and str(v).strip() for v in values)
+
+
+def _with_link(value, cell):
+    """Texto da celula + destino do link, quando o texto visivel nao o mostra
+    (ex.: "Scalation Vero" -> https://...). Assim o endereco tambem e pesquisavel."""
+    link = getattr(cell, "hyperlink", None)
+    target = (getattr(link, "target", None) or "").strip() if link else ""
+    if not target:
+        return value
+    shown = target[7:] if target.lower().startswith("mailto:") else target
+    if value is None or not str(value).strip():
+        return shown
+    if shown.lower() in str(value).lower():
+        return value
+    return f"{value} ({shown})"
+
+
+def _vertical_merges(ws) -> dict:
+    """{(linha, coluna): valor} para as celulas cobertas por mesclagens verticais.
+
+    No Excel, uma celula mesclada por varias linhas (ex.: o nome da operadora ao
+    lado dos contatos dela) so guarda o valor na primeira. Repetir o valor nas
+    linhas de baixo faz cada linha encontrada na busca dizer a quem pertence.
+    Mesclagens so horizontais (titulos) nao sao repetidas.
+    """
+    fill = {}
+    for rng in ws.merged_cells.ranges:
+        if rng.max_row == rng.min_row:
+            continue
+        value = ws.cell(rng.min_row, rng.min_col).value
+        if value is None:
+            continue
+        for r in range(rng.min_row + 1, rng.max_row + 1):
+            fill[(r, rng.min_col)] = value
+            if len(fill) >= MAX_MERGE_FILL:
+                return fill
+    return fill
+
+
 def _raw_xlsx(path: Path):
     from openpyxl import load_workbook
 
-    wb = load_workbook(str(path), read_only=True, data_only=True)
+    full = path.stat().st_size <= FULL_LOAD_MAX_BYTES
+    wb = load_workbook(str(path), read_only=not full, data_only=True)
     try:
         for ws in wb.worksheets[:MAX_SHEETS]:
-            ws.reset_dimensions()  # dimensao gravada no arquivo pode estar errada
             rows = []
-            # iter_rows comeca na linha 1 e devolve linhas vazias nos buracos,
-            # entao a posicao = numero real da linha no Excel.
-            for number, values in enumerate(ws.iter_rows(values_only=True), start=1):
-                if any(v is not None and str(v).strip() for v in values):
-                    rows.append((number, list(values)))
-                    if len(rows) >= MAX_ROWS_PER_SHEET:
-                        break
+            if full:
+                merged = _vertical_merges(ws)
+                # min_row/min_col=1: a posicao na lista = linha/coluna reais do Excel
+                for number, cells in enumerate(
+                    ws.iter_rows(min_row=1, min_col=1, max_col=min(ws.max_column, MAX_COLS)), start=1
+                ):
+                    values = []
+                    for c, cell in enumerate(cells, start=1):
+                        value = _with_link(cell.value, cell)
+                        values.append(merged.get((number, c)) if value is None else value)
+                    if _has_content(values):
+                        rows.append((number, values))
+                        if len(rows) >= MAX_ROWS_PER_SHEET:
+                            break
+            else:
+                ws.reset_dimensions()  # dimensao gravada no arquivo pode estar errada
+                # iter_rows comeca na linha 1 e devolve linhas vazias nos buracos,
+                # entao a posicao = numero real da linha no Excel.
+                for number, values in enumerate(ws.iter_rows(values_only=True), start=1):
+                    if _has_content(values):
+                        rows.append((number, list(values)))
+                        if len(rows) >= MAX_ROWS_PER_SHEET:
+                            break
             yield ws.title, rows
     finally:
         wb.close()
@@ -397,11 +458,12 @@ def row_url(doc_id: int, sheet_id: int, row_number: int) -> str:
     )
 
 
-def render_row_groups(doc, rows, term_re, *, limit_per_sheet: int = 50) -> str:
-    """HTML das linhas encontradas, agrupadas por aba, com a fonte de cada uma.
+def render_row_groups(doc, rows, term_re, *, limit_per_sheet: int = 10, filter_q: str = "") -> str:
+    """HTML das linhas encontradas, uma aba de navegacao por aba da planilha.
 
-    `rows`: [(sheet_id, row_number, cells_json)]. Colunas vazias em todas as
-    linhas mostradas sao omitidas para a tabela caber.
+    `rows`: [(sheet_id, row_number, cells_json)]. Mostra ate `limit_per_sheet`
+    linhas por aba; com `filter_q`, cada aba ganha o link "abrir na planilha"
+    ja filtrado. Colunas vazias em todas as linhas mostradas sao omitidas.
     """
     sheets = {s.id: s for s in doc.sheets}
     by_sheet: dict[int, list] = {}
@@ -434,11 +496,17 @@ def render_row_groups(doc, rows, term_re, *, limit_per_sheet: int = 50) -> str:
                     for number, c in shown
                 ],
                 "total": len(items),
+                "open_url": url_for("documents.detail", doc_id=doc.id, sheet=sheet.id,
+                                    f=filter_q or None),
             }
         )
     if not groups:
         return ""
-    return render_template("_sheet_rows.html", doc=doc, groups=groups)
+    groups.sort(key=lambda g: g["sheet"].ordinal)
+    # abre na aba com mais linhas encontradas
+    active = max(range(len(groups)), key=lambda i: groups[i]["total"])
+    return render_template("_sheet_rows.html", doc=doc, groups=groups, active=active,
+                           filter_q=filter_q)
 
 
 def sheet_page(sheet, *, page: int = 1, filter_q: str = "", target_row: int = 0) -> dict:

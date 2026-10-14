@@ -14,6 +14,7 @@ Fluxo de `answer(pergunta)`:
    algum termo vem listados, os que tem todos os termos primeiro.
 """
 
+import json
 import math
 import re
 import unicodedata
@@ -49,7 +50,7 @@ _QUESTION_WORDS = {
     "ajudar", "favor", "consigo", "posso", "podemos", "devo", "e", "eh", "ou",
     "esta", "estao", "isso", "aqui", "ali", "la", "fica", "ficam", "encontro",
     "encontrar", "acho", "achar", "informacao", "informacoes", "explique", "explica",
-    "mostre", "mostra", "diga", "fale", "ola", "oi", "bom", "dia", "tarde", "noite",
+    "mostre", "mostra", "diga", "fale", "ola", "bom", "dia", "tarde", "noite",  # "oi" fica: e a operadora
     "obrigado", "obrigada", "how", "do", "does", "is", "to", "of", "in", "on", "a",
     "an", "i", "we", "it", "or", "be", "who", "why", "find", "show", "me", "tell",
 }
@@ -215,6 +216,36 @@ def _render_passage(content: str, s: int, e: int, hits) -> str:
     return render_window(content, ws, we, marks)
 
 
+AI_CONTEXT_PAD = 280   # texto ao redor do trecho enviado a IA (um pouco mais que o mostrado)
+
+
+def _plain_passage(content: str, s: int, e: int) -> str:
+    """Texto puro do trecho, mais largo que o exibido, para a IA ter contexto."""
+    ws = _snap_start(content, max(0, s - AI_CONTEXT_PAD))
+    we = _snap_end(content, min(len(content), e + AI_CONTEXT_PAD))
+    return re.sub(r"\s+", " ", content[ws:we]).strip()
+
+
+def _plain_rows(doc, rows) -> str:
+    """Linhas de planilha como texto "Coluna: valor", com aba e linha (para a IA)."""
+    from .sheets import column_letter
+
+    sheets = {s.id: s for s in doc.sheets}
+    lines = []
+    for r in rows:
+        sheet = sheets.get(r.sheet_id)
+        if sheet is None:
+            continue
+        header = sheet.header_list
+        cells = json.loads(r.cells)
+        pairs = [
+            f"{(header[i] if i < len(header) and header[i] else column_letter(sheet.col_offset + i))}: {v}"
+            for i, v in enumerate(cells) if v
+        ]
+        lines.append(f"aba {sheet.name}, linha {r.row_number}: " + "; ".join(pairs))
+    return "\n".join(lines)
+
+
 def _best_rows(doc, regexes, weights, fts_query: str):
     """Melhores linhas de uma planilha: (score, linhas, termos da melhor).
 
@@ -347,6 +378,8 @@ def answer(question: str, url_for_doc) -> dict:
                         "html": render_row_groups(
                             doc, [(r.sheet_id, r.row_number, r.cells) for r in rows], any_re
                         ),
+                        "label": f"Planilha “{doc.title}” ({doc.original_filename})",
+                        "plain": _plain_rows(doc, rows),
                         "covered": [live_terms[k]["word"] for k in sorted(covered)],
                         "complete": len(covered) == len(live_terms),
                         "coverage": sum(weights[k] for k in covered) / total_w,
@@ -365,6 +398,8 @@ def answer(question: str, url_for_doc) -> dict:
                     "filename": doc.original_filename,
                     "url": url_for_doc(doc.id),
                     "html": _render_passage(doc.content, s, e, hits),
+                    "label": f"Documento “{doc.title}” ({doc.original_filename})",
+                    "plain": _plain_passage(doc.content, s, e),
                     "covered": [live_terms[k]["word"] for k in sorted(covered)],
                     "complete": len(covered) == len(live_terms),
                     "coverage": sum(weights[k] for k in covered) / total_w,

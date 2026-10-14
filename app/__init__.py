@@ -41,6 +41,10 @@ def create_app(config_class: type = Config) -> Flask:
     db.init_app(app)
     login_manager.init_app(app)
 
+    from .llm import engine as llm_engine
+
+    llm_engine.log_path = app.config["INSTANCE_DIR"] / "ia.log"
+
     with app.app_context():
         init_engine_pragmas(db.engine)
 
@@ -52,10 +56,12 @@ def create_app(config_class: type = Config) -> Flask:
 
     from .auth import bp as auth_bp
     from .documents import bp as documents_bp
+    from .notes import bp as notes_bp
     from .errors import register_error_handlers
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(documents_bp)
+    app.register_blueprint(notes_bp)
     register_error_handlers(app)
 
     @app.context_processor

@@ -11,7 +11,7 @@ O que ele faz:
 - Faz uma copia de seguranca da pasta "dados" em "_backup\\dados-<data>".
 - Substitui os arquivos do programa (BaseConhecimento.exe e _internal\\) pela
   versao nova, que vem embutida neste executavel.
-- NUNCA toca em "dados\\", ".env" nem "secret.key".
+- NUNCA toca em "dados\\", "modelos\\" (IA local), ".env" nem "secret.key".
 - Se algo falhar no meio da troca, desfaz o que ja tinha mexido.
 - Depois que a versao nova esta no lugar, apagar os arquivos antigos e so
   "faxina": se o Windows/OneDrive segurar algum arquivo, ele fica para tras e e
@@ -34,11 +34,12 @@ from pathlib import Path
 
 APP_NAME = "Base de Conhecimento"
 APP_EXE = "BaseConhecimento.exe"
+CHAMADOS_EXE = "AcompanhamentoChamados.exe"   # modulo de chamados, mesma pasta
 PAYLOAD_NAME = "payload.zip"
 VERSION_FILE = "versao.txt"
 
 # Nunca substituidos nem apagados pela atualizacao.
-PRESERVE = {"dados", ".env", "secret.key", "_backup", "_update_tmp"}
+PRESERVE = {"dados", "modelos", ".env", "secret.key", "_backup", "_update_tmp"}
 STAGING_PREFIX = "_update_tmp"
 KEEP_BACKUPS = 2
 
@@ -165,22 +166,30 @@ def _powershell(cmd: str) -> str:
         return ""
 
 
-def stop_app(root: Path) -> None:
-    exe_path = str((root / APP_EXE).resolve()).lower()
-    killed = False
-
-    # 1) So os processos que rodam a PARTIR desta pasta.
+def _kill_from_folder(root: Path, exe_name: str) -> bool:
+    """Encerra so os processos de `exe_name` que rodam A PARTIR desta pasta."""
+    exe_path = str((root / exe_name).resolve()).lower()
     pids = _powershell(
         "Get-CimInstance Win32_Process -Filter \"Name='%s'\" | "
         "Where-Object { $_.ExecutablePath } | "
         "ForEach-Object { if ($_.ExecutablePath.ToLower() -eq '%s') "
-        "{ $_.ProcessId } }" % (APP_EXE, exe_path.replace("'", "''"))
+        "{ $_.ProcessId } }" % (exe_name, exe_path.replace("'", "''"))
     )
+    killed = False
     for pid in pids.split():
         if pid.strip().isdigit():
             subprocess.run(["taskkill", "/PID", pid.strip(), "/F", "/T"],
                            capture_output=True)
             killed = True
+    return killed
+
+
+def stop_app(root: Path) -> bool:
+    """Encerra o programa (e o modulo de chamados). Devolve True se o modulo de
+    chamados estava aberto, para reabri-lo no fim."""
+    # 1) So os processos que rodam a PARTIR desta pasta.
+    killed = _kill_from_folder(root, APP_EXE)
+    chamados_aberto = _kill_from_folder(root, CHAMADOS_EXE)
 
     # 2) Janela dedicada (Edge/Chrome em modo --app com o nosso perfil).
     _powershell(
@@ -197,6 +206,7 @@ def stop_app(root: Path) -> None:
                        capture_output=True)
 
     time.sleep(2.0)  # deixa o Windows liberar os arquivos
+    return chamados_aberto
 
 
 # --------------------------------------------------------------------------- #
@@ -276,15 +286,17 @@ def rollback(root: Path, moves, stamp: str) -> None:
             log(f"  !! nao consegui restaurar '{dest.name}': {exc}")
 
 
-def relaunch(root: Path) -> None:
+def relaunch(root: Path, *, chamados: bool = False) -> None:
     if os.environ.get("KB_UPDATER_NO_RELAUNCH"):
         return
-    exe = root / APP_EXE
-    if exe.exists():
-        try:
-            subprocess.Popen([str(exe)], cwd=str(root))
-        except OSError:
-            pass  # sem relaunch automatico; a pessoa abre o programa na mao
+    names = [APP_EXE] + ([CHAMADOS_EXE] if chamados else [])
+    for name in names:
+        exe = root / name
+        if exe.exists():
+            try:
+                subprocess.Popen([str(exe)], cwd=str(root))
+            except OSError:
+                pass  # sem relaunch automatico; a pessoa abre o programa na mao
 
 
 # --------------------------------------------------------------------------- #
@@ -338,7 +350,7 @@ def main() -> None:
             pause_and_exit(0)
 
     log("\n[2/4] Encerrando o programa (se estiver aberto)...")
-    stop_app(root)
+    chamados_aberto = stop_app(root)
 
     log("\n[3/4] Backup da pasta 'dados'...")
     try:
@@ -374,7 +386,7 @@ def main() -> None:
     remove_path(staging, tries=4)
 
     log("\nPronto! Reabrindo o programa...")
-    relaunch(root)
+    relaunch(root, chamados=chamados_aberto)
     msgbox(
         f"{APP_NAME} atualizada com sucesso"
         + (f" para a versao {nova}." if nova else ".")

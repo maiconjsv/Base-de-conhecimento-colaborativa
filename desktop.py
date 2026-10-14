@@ -239,9 +239,24 @@ def main() -> None:
                 time.sleep(3600)
         except KeyboardInterrupt:
             pass
-        os._exit(0)
+        _shutdown()
 
     open_ui(url)
+    _shutdown()
+
+
+def _shutdown() -> None:
+    """Desliga a IA local (se estiver ligada) e encerra o programa.
+
+    os._exit pula o atexit; o job object do llm.py ja mataria o motor, mas
+    assim ele fecha de forma limpa.
+    """
+    try:
+        from app.llm import engine
+
+        engine.stop()
+    except Exception:  # noqa: BLE001 - saindo de qualquer jeito
+        pass
     os._exit(0)
 
 

@@ -1,0 +1,33 @@
+IA LOCAL - PASTA "modelos"
+==========================
+
+Esta pasta guarda o modelo da IA que responde no "Perguntar".
+A IA roda neste computador: nada e enviado para a internet.
+
+COMO ATIVAR
+-----------
+1. Coloque nesta pasta o arquivo do modelo:
+      gemma-3-4b-it-Q4_K_M.gguf   (cerca de 2,5 GB)
+   (peca o arquivo a quem distribui o programa, ou ao suporte)
+
+   PROGRAMA DENTRO DO ONEDRIVE (ex.: na Area de Trabalho sincronizada)?
+   Nao coloque o modelo aqui, senao o OneDrive sobe 2,5 GB para a nuvem.
+   Use a pasta local (nao sincroniza):
+      %LOCALAPPDATA%\BaseConhecimento\modelos
+   (cole esse endereco na barra do Explorador de Arquivos e crie a pasta)
+2. Abra o programa e va em "Perguntar". Deve aparecer a chave
+   "Responder com IA local" ligada.
+
+A primeira pergunta demora alguns segundos (o modelo e carregado na
+memoria). Depois de 10 minutos sem uso, a IA desliga sozinha e
+devolve a memoria.
+
+REQUISITOS
+----------
+- Recomendado: 16 GB de RAM. Com 8 GB funciona, mas mais devagar e
+  e melhor fechar outros programas pesados.
+- Atualizacoes do programa NAO apagam esta pasta: o modelo so precisa
+  ser copiado uma vez.
+
+Sem o modelo, o "Perguntar" continua funcionando como antes
+(mostrando os trechos encontrados, sem a resposta escrita pela IA).

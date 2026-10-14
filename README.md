@@ -8,7 +8,8 @@ título, descrição e tags).
 
 > **Quer ajudar?** O projeto é colaborativo. Veja [Como contribuir](#como-contribuir):
 > lá estão o passo a passo, as receitas para as mudanças mais comuns e o checklist
-> do Pull Request. Suporte: **maicon.vieira@atos.ai** · GitHub: **[@maiconjsv](https://github.com/maiconjsv)**.
+> do Pull Request. Para manter o sistema, veja [Manutenção](#manutenção) e a
+> [documentação de cada tecnologia](#documentação-das-tecnologias). Suporte: **maicon.vieira@atos.ai** · GitHub: **[@maiconjsv](https://github.com/maiconjsv)**.
 
 - **Envio:** botão de anexar + arrastar e soltar, vários arquivos de uma vez.
   Nada para digitar no upload — ao anexar, o envio começa na hora, com tela de
@@ -32,6 +33,22 @@ título, descrição e tags).
   ocorrências do termo dentro dele, com o termo marcado — casamento por prefixo e
   sem acento, igual ao índice. Endpoint `GET /search/hits/<id>?q=…` (JSON),
   lógica em `app/locator.py`.
+- **Barra de pesquisa abaixo das abas:** como a barra de endereço do navegador, ela
+  age **na aba aberta** e mostra a pesquisa daquela aba ao trocar de aba. *Buscar*
+  (Enter) faz a busca por palavra-chave; **✦ Perguntar à IA** (Ctrl+Enter) abre o
+  chat, ou continua a conversa se a aba já for o chat. Alt+Enter abre o resultado numa
+  aba nova; Ctrl+L ou F6 levam o cursor para a barra.
+- **Bloco de notas para cruzar dados entre abas:** o botão **Notas** da barra (ou
+  Alt+N) abre um painel lateral que continua aberto enquanto você troca de aba. Ao
+  **selecionar um texto em qualquer aba**, aparece o botão **+ Notas** (ou Alt+S), e o
+  trecho entra como **recorte com a fonte**: título da página e link que reabre de onde
+  veio. Numa linha da pseudoplanilha, a fonte guarda a aba e a linha exatas. Embaixo dos
+  recortes há um campo livre de **anotações** para cruzar e concluir. Dá para ter várias
+  notas (criar, renomear, apagar), copiar tudo ou exportar em `.txt`. As notas são
+  salvas automaticamente no banco, uma por usuário, e entram no backup. Código em
+  `app/notes.py` (API `/notas/api`; alterações exigem o cabeçalho `X-KB-Notas`, que um
+  site de fora não consegue enviar), `static/notes.js` (painel) e `static/in_tab.js`
+  (botão sobre a seleção).
 - **Abas como num navegador:** o sistema abre numa moldura (`/`) com uma barra de
   abas abaixo do menu. Cada aba é uma página independente do sistema (pesquisa,
   documento, planilha filtrada, Perguntar…), com sua própria rolagem e estado. A
@@ -42,6 +59,12 @@ título, descrição e tags).
   reabrir o programa. Técnica: cada aba é um `<iframe>` (`static/tabs.js`); dentro
   dela, a página esconde o próprio menu e repassa os cliques de "nova aba" para a
   moldura (`static/in_tab.js`). Sem a moldura, as páginas funcionam sozinhas.
+- **Modo escuro:** o botão de lua/sol no menu alterna entre claro e escuro, e a
+  escolha vale para todas as abas abertas. Sem escolha salva, o sistema segue o tema
+  do Windows. Técnica: `data-theme` no `<html>`, aplicado por um script no `<head>`
+  antes de pintar (`base.html`) e alternado pelo `static/theme.js`. No `style.css`, a
+  escala `--brand-*` (textos e fundos claros) se inverte no escuro, enquanto
+  `--solid-*` (menu, botões, barra de abas) fica igual.
 - **Pesquisas em abas, com cruzamento:** a tela `/pesquisas` mantém várias pesquisas
   abertas ao mesmo tempo, uma por aba, cada uma com sua cor. A aba **Cruzar** combina
   os resultados de duas ou mais abas: documentos que aparecem **em todas** (∩), **em
@@ -57,6 +80,50 @@ título, descrição e tags).
   com menos de 200 caracteres só são comparados pelo arquivo. O duplicado não é gravado
   e o aviso diz qual documento já existia. Lógica em `app/dedup.py`, tabela
   `document_fingerprint`. Documentos antigos recebem a impressão na inicialização.
+- **IA local no Perguntar (Gemma 3 4B):** com o modelo instalado, a resposta do
+  Perguntar é escrita por uma IA que roda **no próprio computador** (nada vai para a
+  internet). A busca local escolhe os trechos, a IA lê só esses trechos e responde
+  citando as fontes ([1], [2]… clicáveis), e diz quando a informação não está na
+  documentação. A resposta aparece aos poucos (streaming), e uma chave na tela liga ou
+  desliga a IA. O motor é o `llama-server` do llama.cpp: liga na primeira pergunta,
+  desliga sozinho após 10 min sem uso e morre junto com o programa (job object do
+  Windows). Arquivos: motor em `llama\`, modelo `.gguf` em `modelos\` (o atualizador
+  nunca mexe nessa pasta). O sistema lê a RAM total e a livre da máquina e avisa quando
+  está curta. Para preparar: `scripts\baixar_ia.py`. Código em `app/llm.py`, endpoints
+  `GET /perguntar/ia?q=` (NDJSON em streaming) e `/perguntar/ia/status`. Sem modelo, o
+  Perguntar funciona como antes, e o aviso "não instalada — por quê?" explica onde pôr o
+  arquivo. **Conversa:** a IA vê as 2 últimas perguntas e respostas (parâmetro `ctx`),
+  então entende continuações como "e o email?". Continuação curta (até 2 palavras-chave)
+  é buscada junto com a pergunta anterior; "Nova conversa" zera a memória. **Modelo
+  fora do OneDrive:** além de `modelos\`, o sistema procura em
+  `%LOCALAPPDATA%\BaseConhecimento\modelos`, uma pasta local que não sincroniza.
+- **Acompanhamento de Chamados (programa à parte):** `AcompanhamentoChamados.exe`, na
+  mesma pasta do programa, é uma janela nativa (tkinter, sem navegador) para acompanhar
+  chamados e ser cobrado por eles. A lista compacta mostra número, título, cliente,
+  status, prioridade, **próxima cobrança** e **prazo**, colorida por urgência. Há
+  ações rápidas: registrar acompanhamento (com anotação), mudar status, adiar, copiar o
+  número e abrir o link, e cada chamado guarda um histórico. **Notificar cobrança a cada
+  X**: no cadastro há uma seção própria (🔔) com "A cada [N] [minuto(s)/hora(s)/dia(s)]",
+  atalhos (15 min a 1 dia), "Padrão da prioridade" ou "Não notificar (só prazo)", e uma
+  frase que confirma o próximo aviso. Na lista, a coluna **Notificar** e o botão
+  **🔔 Notificar a cada ▾** (também no botão direito) trocam o intervalo sem abrir o
+  cadastro. No alerta, **"Vi, lembrar em X"** adia pelo próprio intervalo. Os **alertas
+  são parametrizáveis** (botão ⚙):
+  - cadência "sem acompanhamento há X" por prioridade (padrão P1 30 min, P2 1 h,
+    P3 4 h, P4 8 h) ou por chamado;
+  - avisos antes do prazo (padrão 60 e 15 min) e repetição com o prazo estourado
+    (15 min);
+  - horário de trabalho e dias úteis (fora deles os alertas esperam, exceto P1 se
+    configurado);
+  - status que não cobram, tempo de adiamento padrão, som e abrir junto com o Windows.
+
+  O alerta abre uma janela por cima de tudo, com som e a barra de tarefas piscando, e
+  cada motivo fica no cartão até a pessoa agir. Também exporta para CSV. Os dados ficam
+  em `dados\chamados.sqlite`. Código em `chamados/` (`store.py` banco, `alertas.py`
+  regras puras e testáveis, `app.py` interface), entrada `chamados_main.py`, build
+  `Chamados.spec` (arquivo único). O `build.ps1` coloca o exe na pasta do programa, e o
+  atualizador o fecha antes de trocar os arquivos e o reabre depois. Para rodar em
+  desenvolvimento: `.\.venv\Scripts\python.exe chamados_main.py`.
 - **Perguntar (assistente sem IA):** tela de chat em `/perguntar`. A pergunta em
   linguagem natural vira palavras-chave (sem palavras vazias, reduzidas a radical:
   "senhas" → `senh`, "configuração" → `configur`), o FTS5 acha todo documento que
@@ -73,11 +140,17 @@ título, descrição e tags).
   planilha aparece como **pseudoplanilha**: abas, letras de coluna, números de linha,
   filtro por palavra-chave e paginação de 200 linhas, sempre com a fonte
   (arquivo › aba › linhas). Na busca e no assistente, os resultados de planilha
-  aparecem como tabela com as linhas que citam os termos. O número de cada linha
+  aparecem com **uma aba por aba da planilha** (com a contagem de linhas, abrindo na
+  aba com mais resultados), até 10 linhas por aba e o link "Abrir esta aba na
+  planilha", já filtrada. O número de cada linha
   abre a pseudoplanilha naquele ponto (`?sheet=<id>&row=<n>`). Um termo que aparece
   no cabeçalho ou no nome da aba conta para todas as linhas daquela aba. Planilhas
   enviadas antes desse recurso são estruturadas automaticamente na inicialização
   (`backfill_sheets`). Limites: 50 abas, 20 mil linhas por aba, 80 colunas.
+  No XLSX de até 25 MB, o **destino dos links** entra no texto pesquisável quando o
+  texto visível não o mostra, e células **mescladas na vertical** repetem o valor nas
+  linhas cobertas. **CSV guarda uma aba só:** ao enviar um CSV, o sistema avisa que,
+  se a planilha original tem várias abas, o certo é enviar o `.xlsx`.
 - **Formatos com extração de texto:** PDF, DOCX, TXT/Markdown, XLSX/XLSM/XLS, PPTX, CSV.
 - **Acesso:** login simples por usuário/senha (Flask-Login). Todo usuário logado
   vê todos os documentos e pode enviar, editar e remover.
@@ -131,13 +204,15 @@ Acesse http://localhost:5000 e faça login.
 app/
   __init__.py     app factory, comandos CLI, contato do mantenedor nos templates
   db.py           SQLAlchemy + tabelas/triggers FTS5 (documentos e linhas de planilha)
-  models.py       User, Document, DocumentImage, DocumentSheet, SheetRow, DocumentFingerprint
+  models.py       User, Document, DocumentImage, DocumentSheet, SheetRow, DocumentFingerprint, Note
+  notes.py        bloco de notas (API JSON do painel lateral)
   extract.py      extração de texto + metadados embutidos por formato
   images.py       extração das imagens embutidas + miniaturas (Pillow)
   sheets.py       planilhas estruturadas: leitura, gravação, pseudoplanilha
   search.py       consulta FTS5 (bm25 + snippet) + contagem de ocorrências
   locator.py      acha todas as ocorrências dos termos dentro de um documento
   ask.py          assistente "Perguntar": palavras-chave, pontuação de trechos
+  llm.py          IA local: liga/desliga o llama-server, prompt, streaming
   dedup.py        verificador de duplicados (impressão do arquivo e do texto)
   errors.py       páginas de erro 403/404/413/500
   auth/           blueprint de login/registro/configuração inicial
@@ -149,12 +224,15 @@ app/
   templates/      telas Jinja (base.html tem navbar e rodapé)
   static/         style.css (tema Semantix), tabs.js + in_tab.js (abas de navegador),
                   workspace.js (tela Pesquisas), imagens da marca
+chamados/         Acompanhamento de Chamados (exe à parte): store.py, alertas.py, app.py
+chamados_main.py  ponto de entrada do AcompanhamentoChamados.exe (Chamados.spec)
 config.py         configuração (SECRET_KEY, limites, extensões, KB_DATA_DIR, contato)
 run.py            ponto de entrada web (desenvolvimento / servidor)
 desktop.py        ponto de entrada do programa Windows (janela + servidor local)
 updater.py        AtualizarBaseConhecimento.exe (troca o programa, preserva dados\)
 BaseConhecimento.spec / Atualizador.spec / build.ps1   empacotamento com PyInstaller
 scripts/make_zip.py   gera o payload.zip do atualizador (usado pelo build.ps1)
+scripts/baixar_ia.py  baixa o motor llama.cpp e o modelo Gemma para vendor/ (não versionado)
 CONTRIBUTING.md   atalho para a seção "Como contribuir" (o GitHub mostra em issues/PRs)
 ```
 
@@ -164,7 +242,8 @@ CONTRIBUTING.md   atalho para a seção "Como contribuir" (o GitHub mostra em is
 > problemas): **[COMPILAR-E-DISTRIBUIR.md](COMPILAR-E-DISTRIBUIR.md)**.
 
 ```powershell
-.\build.ps1 -Clean
+.\.venv\Scripts\python.exe scripts\baixar_ia.py   # uma vez: motor + modelo da IA local em vendor\
+.\build.ps1 -Clean                                # ou -ComModelo para incluir o modelo no zip
 ```
 
 Isso gera `dist\BaseConhecimento\` com:
@@ -213,6 +292,132 @@ waitress-serve --port=5000 --call app:create_app
 
 Defina `SECRET_KEY` no `.env` e faça backup periódico de `instance/` e `uploads/`
 (ou da pasta `KB_DATA_DIR`).
+
+---
+
+## Manutenção
+
+Guia para quem mantém o sistema no dia a dia. Para entender o código antes de mexer,
+leia as seções [Estrutura](#estrutura) e [Como o sistema funciona](#como-o-sistema-funciona-visão-para-quem-vai-mexer).
+
+### Ciclo de uma mudança
+
+```powershell
+# 1. ambiente (uma vez por máquina)
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe scripts\baixar_ia.py          # motor + modelo da IA (opcional)
+
+# 2. desenvolver e testar
+$env:FLASK_DEBUG = "1"                                    # recarrega ao salvar e mostra o erro detalhado
+.\.venv\Scripts\python.exe run.py                         # sistema web em http://127.0.0.1:5000
+.\.venv\Scripts\python.exe chamados_main.py               # módulo de chamados
+
+# 3. gerar e distribuir
+.\build.ps1                                               # dist\BaseConhecimento\ + dist\AtualizarBaseConhecimento.exe
+```
+
+Antes de distribuir, teste o executável **numa cópia** da pasta `dist\BaseConhecimento`.
+O build recria essa pasta, e o que você testar dentro dela é apagado no build seguinte.
+Para quem já usa, mande só o `AtualizarBaseConhecimento.exe` (ver
+[COMPILAR-E-DISTRIBUIR.md](COMPILAR-E-DISTRIBUIR.md)).
+
+### Tarefas periódicas
+
+| Tarefa | Como fazer | Cuidado |
+|---|---|---|
+| **Atualizar bibliotecas Python** | `.\.venv\Scripts\python.exe -m pip list --outdated`. Suba **uma de cada vez** no `requirements.txt`, rode o [checklist de testes](#testando-sua-mudança) e gere o build | Versões novas do PyInstaller, Flask ou SQLAlchemy podem mudar comportamento. Confira o changelog nos links abaixo |
+| **Atualizar o motor da IA (llama.cpp)** | Troque `LLAMA_BUILD` em `scripts\baixar_ia.py` por um build mais novo ([releases](https://github.com/ggml-org/llama.cpp/releases)), apague `vendor\llama\`, rode o script de novo, teste o Perguntar e gere o build | O llama.cpp muda rápido. Se os parâmetros de `llm.py` (`-c`, `-np`, `--port`) mudarem de nome, o motor não sobe; veja `dados\ia.log` |
+| **Trocar o modelo de IA** | Coloque o `.gguf` em `vendor\modelos\` (ou `modelos\`) e ajuste `PREFERRED_MODEL` em `app/llm.py` | Modelo maior = mais RAM e mais lento. Ajuste `MAX_CONTEXT_CHARS` e meça o tempo de resposta |
+| **Mudar o banco de dados** | Prefira **tabela nova**; coluna nova exige um passo em `ensure_database` (`desktop.py`) | Não há migrações. Leia a receita [Alterar o banco de dados](#receitas-para-mudanças-comuns) |
+| **Trocar a versão do Python** | Instale a nova, apague `.venv\`, recrie e reinstale as dependências | O build usa o Python da `.venv`. Teste o executável depois |
+| **Backup** | Copie a pasta `dados\` da instalação | O atualizador já guarda as 2 últimas cópias em `_backup\` |
+
+### Onde olhar quando algo dá errado
+
+| Sintoma | Onde investigar |
+|---|---|
+| Erro numa página do sistema | Rode `run.py` com `FLASK_DEBUG=1` e reproduza: o erro completo aparece no terminal e no navegador |
+| O executável não abre ou fecha sozinho | Rode `run.py` no projeto; o executável não tem console. Para ver o servidor do exe: `$env:KB_NO_WINDOW="1"; .\BaseConhecimento.exe` |
+| IA "não instalada" ou não responde | Clique em "não instalada — por quê?"; veja `dados\ia.log` (saída do motor); confira `llama\llama-server.exe` e o `.gguf` |
+| IA lenta | Pouca RAM livre (o aviso aparece no Perguntar) ou trechos demais. Reduza `MAX_CONTEXT_CHARS` / `MAX_AI_PASSAGES` em `app/llm.py` |
+| Planilha sem todas as abas | Provavelmente foi enviada como CSV, que guarda só uma aba. Envie o `.xlsx` |
+| Busca não acha algo que existe | Confira o texto extraído na página do documento ("Ver texto extraído"). Se estiver vazio, a extração falhou (PDF escaneado, por exemplo) |
+| Build falha com "arquivo em uso" | Feche o programa aberto a partir de `dist\` (o `build.ps1` já tenta). O antivírus pode estar lendo arquivos; rode de novo |
+| Atualização desfeita | Leia a mensagem: costuma ser OneDrive ou Program Files. Restos `.old-*` são apagados na próxima atualização |
+| Módulo de chamados com erro | Rode `chamados_main.py` no terminal para ver o erro; os dados ficam em `dados\chamados.sqlite` |
+
+### Dicas para manter com ajuda de IA (Claude Code, Copilot)
+
+- Peça para ler **este README primeiro**: ele tem a arquitetura, as receitas e as regras do projeto.
+- Mudanças pequenas e testadas uma de cada vez são mais seguras do que pedir várias coisas juntas.
+- Sempre teste o **executável gerado**, não só o `run.py`: o empacotamento esconde problemas (arquivo não incluído, caminho diferente).
+
+---
+
+## Documentação das tecnologias
+
+Links oficiais de cada peça usada no projeto, agrupados pela parte do sistema onde aparecem.
+
+### Base
+
+| Tecnologia | Para que usamos | Documentação |
+|---|---|---|
+| Python 3.12 | linguagem de todo o projeto | [docs.python.org/3.12](https://docs.python.org/3.12/) |
+| Bibliotecas padrão do Python | `sqlite3` (módulo de chamados), `ctypes` (APIs do Windows), `zipfile`, `urllib`, `winsound` | [sqlite3](https://docs.python.org/3/library/sqlite3.html) · [ctypes](https://docs.python.org/3/library/ctypes.html) · [winsound](https://docs.python.org/3/library/winsound.html) |
+| PowerShell | `build.ps1`, scripts de apoio | [learn.microsoft.com/powershell](https://learn.microsoft.com/en-us/powershell/) |
+| Git e GitHub | versionamento, issues e Pull Requests | [docs.github.com/pt/pull-requests](https://docs.github.com/pt/pull-requests) |
+
+### Sistema web (servidor)
+
+| Tecnologia | Para que usamos | Documentação |
+|---|---|---|
+| Flask 3 | rotas, páginas, app factory (`app/`) | [flask.palletsprojects.com](https://flask.palletsprojects.com/en/stable/) |
+| Jinja2 | templates HTML (`app/templates/`) | [jinja.palletsprojects.com](https://jinja.palletsprojects.com/en/stable/) |
+| Werkzeug | base HTTP do Flask (uploads, respostas em streaming) | [werkzeug.palletsprojects.com](https://werkzeug.palletsprojects.com/en/stable/) |
+| Flask-SQLAlchemy / SQLAlchemy | modelos e consultas ao banco (`app/models.py`) | [flask-sqlalchemy.readthedocs.io](https://flask-sqlalchemy.readthedocs.io/en/stable/) · [docs.sqlalchemy.org](https://docs.sqlalchemy.org/en/21/) |
+| Flask-Login | login e sessão dos usuários | [flask-login.readthedocs.io](https://flask-login.readthedocs.io/en/latest/) |
+| Flask-WTF / WTForms | formulários com proteção CSRF | [flask-wtf.readthedocs.io](https://flask-wtf.readthedocs.io/en/latest/) · [wtforms.readthedocs.io](https://wtforms.readthedocs.io/en/stable/) |
+| SQLite + FTS5 | banco local e busca full-text (`app/db.py`, `app/search.py`) | [sqlite.org/docs](https://www.sqlite.org/docs.html) · [FTS5](https://www.sqlite.org/fts5.html) |
+| waitress | servidor web do executável | [docs.pylonsproject.org/projects/waitress](https://docs.pylonsproject.org/projects/waitress/en/stable/) |
+| python-dotenv | ler o `.env` | [saurabh-kumar.com/python-dotenv](https://saurabh-kumar.com/python-dotenv/) |
+
+### Leitura de documentos
+
+| Tecnologia | Para que usamos | Documentação |
+|---|---|---|
+| pypdf | texto, metadados e imagens de PDF | [pypdf.readthedocs.io](https://pypdf.readthedocs.io/en/stable/) |
+| python-docx | Word (.docx) | [python-docx.readthedocs.io](https://python-docx.readthedocs.io/en/latest/) |
+| python-pptx | PowerPoint (.pptx) | [python-pptx.readthedocs.io](https://python-pptx.readthedocs.io/en/latest/) |
+| openpyxl | Excel .xlsx/.xlsm (abas, links, células mescladas) | [openpyxl.readthedocs.io](https://openpyxl.readthedocs.io/en/stable/) |
+| xlrd | Excel antigo (.xls) | [xlrd.readthedocs.io](https://xlrd.readthedocs.io/en/latest/) |
+| Pillow | miniaturas das imagens extraídas | [pillow.readthedocs.io](https://pillow.readthedocs.io/en/stable/) |
+| Python-Markdown | renderizar arquivos .md | [python-markdown.github.io](https://python-markdown.github.io/) |
+
+### Interface (navegador)
+
+| Tecnologia | Para que usamos | Documentação |
+|---|---|---|
+| Bootstrap 5.3 | base visual, modo escuro (`data-bs-theme`) | [getbootstrap.com/docs/5.3](https://getbootstrap.com/docs/5.3/) |
+| APIs web (MDN) | resposta da IA em streaming (`fetch` + `ReadableStream`), seleção de texto para as notas, sincronizar tema entre abas (evento `storage`) | [Streams](https://developer.mozilla.org/en-US/docs/Web/API/Streams_API/Using_readable_streams) · [Selection](https://developer.mozilla.org/en-US/docs/Web/API/Selection) · [storage event](https://developer.mozilla.org/en-US/docs/Web/API/Window/storage_event) |
+
+### Programa Windows
+
+| Tecnologia | Para que usamos | Documentação |
+|---|---|---|
+| PyInstaller | gerar os `.exe` (`*.spec`) | [pyinstaller.org](https://pyinstaller.org/en/stable/) |
+| Microsoft Edge (modo `--app`) | janela dedicada do programa (`desktop.py`) | [políticas do Edge](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies) · [lista de parâmetros do Chromium](https://peter.sh/experiments/chromium-command-line-switches/) (não oficial) |
+| tkinter / ttk | interface nativa do módulo de chamados | [tkinter](https://docs.python.org/3/library/tkinter.html) · [tkinter.ttk](https://docs.python.org/3/library/tkinter.ttk.html) |
+| APIs do Windows (via `ctypes`) | motor da IA morre junto com o programa, RAM da máquina, piscar na barra de tarefas, uma cópia só aberta | [Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects) · [GlobalMemoryStatusEx](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-globalmemorystatusex) · [FlashWindowEx](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-flashwindowex) · [CreateMutexW](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-createmutexw) |
+
+### Inteligência artificial local
+
+| Tecnologia | Para que usamos | Documentação |
+|---|---|---|
+| llama.cpp (`llama-server`) | motor que roda o modelo no processador | [repositório](https://github.com/ggml-org/llama.cpp) · [servidor e parâmetros](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md) · [releases](https://github.com/ggml-org/llama.cpp/releases) |
+| Formato GGUF | arquivo do modelo (`modelos\*.gguf`) | [especificação GGUF](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md) |
+| Gemma 3 4B (Google) | o modelo de linguagem | [documentação do Gemma](https://ai.google.dev/gemma/docs) · [termos de uso](https://ai.google.dev/gemma/terms) · [arquivo usado (Hugging Face)](https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF) |
+| API de chat compatível com OpenAI | formato das mensagens trocadas com o motor (`/v1/chat/completions`) | [referência da API de chat](https://platform.openai.com/docs/api-reference/chat) |
 
 ---
 
@@ -403,7 +608,8 @@ Princípios que guiam as decisões:
   não use `window.top` nem dependa do menu do topo. Para um link ou botão abrir uma
   aba nova da moldura, marque com `data-newtab`.
 - Use as cores do tema (`var(--brand-600)`, `var(--line)` etc., definidas no topo
-  do `style.css`). Não use cores soltas.
+  do `style.css`). Não use cores soltas, porque elas quebram o modo escuro. Para
+  fundo roxo forte com texto branco, use `--solid-*`. Teste a tela nos dois temas.
 - JavaScript: vanilla, inline no template quando é curto. Quando cresce, vai para um
   arquivo em `app/static/`, como o `workspace.js`. Ao montar HTML com dados do usuário,
   escape sempre (veja a função `esc` em `search.html`).
@@ -457,6 +663,7 @@ O projeto ainda não tem testes automatizados, e um PR que adicionar os primeiro
 - [ ] Upload de PDF, DOCX, XLSX e um arquivo inválido (o inválido deve dar mensagem, não erro)
 - [ ] Busca: resultados, contagem de ocorrências e expansão de um resultado
 - [ ] Abas do topo: abrir pelo +, pela busca do menu e por clique do meio; fechar; reabrir o programa e ver as abas voltarem
+- [ ] Notas: selecionar texto numa aba → "+ Notas"; o recorte abre a fonte; anotação salva sozinha e volta ao reabrir
 - [ ] Pesquisas: abrir, fechar e trocar abas; cruzar duas abas nas três operações
 - [ ] Enviar o mesmo arquivo duas vezes: o segundo deve ser ignorado com aviso
 - [ ] Perguntar: uma pergunta com resposta, uma sem resposta e uma só com palavras vazias

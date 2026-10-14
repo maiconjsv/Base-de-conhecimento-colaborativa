@@ -197,3 +197,27 @@ class DocumentFingerprint(db.Model):
     )
     file_sha256 = db.Column(db.String(64), nullable=False, index=True)
     text_sha256 = db.Column(db.String(64), default="", nullable=False, index=True)
+
+
+class Note(db.Model):
+    """Bloco de notas do usuario (painel lateral da moldura de abas).
+
+    `clips`: JSON com os recortes trazidos das abas, cada um com a fonte:
+    [{"text", "title", "url", "at"}]. `body`: texto livre para cruzar os dados.
+    """
+
+    __tablename__ = "note"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    title = db.Column(db.String(120), nullable=False, default="Minhas anotações")
+    body = db.Column(db.Text, nullable=False, default="")
+    clips = db.Column(db.Text, nullable=False, default="[]")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    @property
+    def clip_list(self) -> list[dict]:
+        return json.loads(self.clips or "[]")

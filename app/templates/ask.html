@@ -3,8 +3,17 @@
 {% block content %}
 <div class="page-header">
   <h1 class="h4">Perguntar à base</h1>
-  <span class="text-muted small">Responde com trechos dos documentos cadastrados, tudo no seu computador.</span>
+  <div class="ai-switch" id="ai-switch" hidden>
+    <label class="form-check form-switch mb-0">
+      <input class="form-check-input" type="checkbox" role="switch" id="ai-toggle">
+      <span class="form-check-label">Responder com IA local</span>
+    </label>
+    <span class="ai-pill" id="ai-pill" role="button" tabindex="0"></span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="chat-reset" hidden
+            title="Começar do zero: a IA esquece as perguntas anteriores">Nova conversa</button>
+  </div>
 </div>
+<p class="text-muted small mt-n2 mb-3" id="ai-note">Responde com trechos dos documentos cadastrados, tudo no seu computador.</p>
 
 <div class="chat card">
   <div class="chat__log" id="chat-log" aria-live="polite">
@@ -34,6 +43,9 @@
 <script>
 (function () {
   var API = "{{ url_for('documents.ask_api') }}";
+  var AI_URL = "{{ url_for('documents.ask_ai') }}";
+  var AI_STATUS = "{{ url_for('documents.ask_ai_status') }}";
+  var AI_KEY = 'kb.ia';
   var HITS_BASE = "{{ url_for('documents.search') }}/hits/";
   var SEARCH = "{{ url_for('documents.search') }}";
   var INITIAL = {{ initial | tojson }};
@@ -185,6 +197,147 @@
       });
   });
 
+  // ---------------------------------------------------------- IA local
+  var aiAvailable = false;
+  var aiToggle = document.getElementById('ai-toggle');
+  var aiReason = '';
+  var history = [];             // [{q, a}] respostas da IA nesta conversa
+  var resetBtn = document.getElementById('chat-reset');
+  var pillEl = document.getElementById('ai-pill');
+
+  function showReason() {
+    if (aiReason) alert('A IA local não está ativa neste computador.\n\n' + aiReason);
+  }
+  pillEl.addEventListener('click', showReason);
+  pillEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') showReason(); });
+  resetBtn.addEventListener('click', function () {
+    history = [];
+    resetBtn.hidden = true;
+    addMsg('bot', '<span class="text-muted small">Nova conversa: as perguntas anteriores foram esquecidas.</span>');
+    input.focus();
+  });
+
+  function aiWanted() {
+    try { return localStorage.getItem(AI_KEY) !== 'off'; } catch (e) { return true; }
+  }
+  function aiOn() { return aiAvailable && aiToggle.checked; }
+
+  fetch(AI_STATUS).then(function (r) { return r.ok ? r.json() : null; }).then(function (st) {
+    if (!st) return;
+    var pill = document.getElementById('ai-pill');
+    document.getElementById('ai-switch').hidden = false;
+    aiAvailable = st.available;
+    aiToggle.disabled = !st.available;
+    aiToggle.checked = st.available && aiWanted();
+    if (st.available) {
+      pill.textContent = st.model.replace(/-Q\d.*$/i, '');
+      pill.title = 'Modelo ' + st.model + ' (' + st.model_gb + ' GB) · RAM ' + st.ram_total_gb + ' GB'
+                 + (st.warning ? '\n' + st.warning : '');
+      if (st.warning) pill.classList.add('ai-pill--warn');
+      document.getElementById('ai-note').textContent =
+        'A IA local lê os trechos encontrados e escreve a resposta, citando as fontes. Roda neste computador: nada sai daqui.';
+    } else {
+      pill.textContent = 'não instalada — por quê?';
+      pill.title = st.reason;
+      aiReason = st.reason;
+      pill.classList.add('ai-pill--off');
+    }
+  }).catch(function () { /* sem status: segue sem IA */ });
+
+  aiToggle.addEventListener('change', function () {
+    try { localStorage.setItem(AI_KEY, aiToggle.checked ? 'on' : 'off'); } catch (e) { /* ok */ }
+  });
+
+  // texto da IA -> HTML seguro: escapa tudo, depois so negrito, listas e citacoes [n]
+  function formatAnswer(text, sources) {
+    var h = esc(text);
+    h = h.replace(/^#{1,6}\s*/gm, '');
+    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/^(\s*)[-*] /gm, '$1• ');
+    h = h.replace(/\[(\d+)\]/g, function (m, n) {
+      var s = sources[parseInt(n, 10) - 1];
+      if (!s) return m;
+      return '<a class="chat-cite" href="' + esc(s.url) + '" target="_blank" data-newtab title="'
+           + esc(s.title) + '">' + n + '</a>';
+    });
+    return h.replace(/\n/g, '<br>');
+  }
+
+  function sourcesHtml(passages) {
+    return '<div class="chat-sources"><span class="chat-sources__label">Fontes</span>'
+      + passages.map(function (p, i) {
+          return '<a class="chat-source" href="' + esc(p.url) + '" target="_blank" data-newtab title="'
+            + esc(p.filename) + '"><b>' + (i + 1) + '</b>' + esc(p.title)
+            + (p.kind === 'table' ? ' <span class="chat-source__kind">planilha</span>' : '') + '</a>';
+        }).join('') + '</div>';
+  }
+
+  function askAI(question, pending) {
+    var bubble = pending.querySelector('.chat-msg__bubble');
+    var data = null, raw = '', answerEl = null, statusEl = null, failed = false;
+
+    function setup(meta) {
+      data = meta;
+      pending.dataset.hitsQ = data.hits_q || '';
+      if (!data.passages.length) { bubble.innerHTML = render(data); return; }
+      var trechos = '';
+      data.passages.forEach(function (p, i) { trechos += passageHtml(p, i); });
+      bubble.innerHTML = termsHtml(data)
+        + '<div class="chat-ai"><div class="chat-ai__status"><span class="chat-typing"><i></i><i></i><i></i></span>'
+        + '<span data-role="status">Procurando…</span></div><div class="chat-ai__text" data-role="answer"></div></div>'
+        + sourcesHtml(data.passages)
+        + '<details class="chat-docs chat-used"><summary>Ver os trechos usados (' + data.passages.length + ')</summary>'
+        + '<div class="mt-2">' + trechos + '</div></details>'
+        + docsHtml(data);
+      answerEl = bubble.querySelector('[data-role=answer]');
+      statusEl = bubble.querySelector('.chat-ai__status');
+    }
+    function handle(ev) {
+      if (ev.type === 'meta') setup(ev.result);
+      else if (ev.type === 'status' && statusEl) statusEl.querySelector('[data-role=status]').textContent = ev.text;
+      else if (ev.type === 'delta' && answerEl) {
+        raw += ev.text;
+        answerEl.innerHTML = formatAnswer(raw, data.passages);
+      } else if (ev.type === 'error') {
+        failed = true;
+        if (statusEl) statusEl.remove();
+        if (answerEl) {
+          answerEl.innerHTML = '<span class="text-danger">' + esc(ev.text).replace(/\n/g, '<br>')
+            + '</span><br><span class="small text-muted">Os trechos encontrados estão logo abaixo.</span>';
+          var used = bubble.querySelector('.chat-used');
+          if (used) used.open = true;
+        } else {
+          bubble.innerHTML = '<span class="text-danger">' + esc(ev.text) + '</span>';
+        }
+      } else if (ev.type === 'done') {
+        if (statusEl) statusEl.remove();
+        if (!raw.trim() && !failed && answerEl) answerEl.textContent = 'A IA não gerou resposta. Veja os trechos abaixo.';
+        if (raw.trim() && !failed) {          // entra na memoria da conversa
+          history.push({ q: question, a: raw.trim().slice(0, 500) });
+          history = history.slice(-2);
+          resetBtn.hidden = false;
+        }
+      }
+    }
+
+    var ctx = history.length ? '&ctx=' + encodeURIComponent(JSON.stringify(history.slice(-2))) : '';
+    return fetch(AI_URL + '?q=' + encodeURIComponent(question) + ctx).then(function (r) {
+      if (!r.ok || !r.body) throw 0;
+      var reader = r.body.getReader(), dec = new TextDecoder(), buf = '';
+      function pump() {
+        return reader.read().then(function (chunk) {
+          if (chunk.done) { if (buf.trim()) handle(JSON.parse(buf)); return; }
+          buf += dec.decode(chunk.value, { stream: true });
+          var lines = buf.split('\n');
+          buf = lines.pop();
+          lines.forEach(function (l) { if (l.trim()) handle(JSON.parse(l)); });
+          return pump();
+        });
+      }
+      return pump();
+    });
+  }
+
   function ask(question) {
     question = (question || '').trim();
     if (!question || busy) return;
@@ -192,6 +345,16 @@
     input.value = '';
     addMsg('user', esc(question));
     var pending = addMsg('bot', '<span class="chat-typing"><i></i><i></i><i></i></span>');
+
+    if (aiOn()) {
+      askAI(question, pending)
+        .catch(function () {
+          pending.querySelector('.chat-msg__bubble').innerHTML =
+            '<span class="text-danger">Não consegui consultar a IA agora. Tente de novo ou desligue a IA.</span>';
+        })
+        .finally(function () { busy = false; input.focus(); });
+      return;
+    }
 
     fetch(API + '?q=' + encodeURIComponent(question))
       .then(function (r) { if (!r.ok) throw 0; return r.json(); })
@@ -211,6 +374,12 @@
   }
 
   form.addEventListener('submit', function (ev) { ev.preventDefault(); ask(input.value); });
+  // a barra de pesquisa da moldura (abaixo das abas) manda a pergunta para este chat
+  window.kbAsk = function (q) {
+    if (busy) return false;
+    ask(q);
+    return true;
+  };
   if (INITIAL) ask(INITIAL);
 })();
 </script>

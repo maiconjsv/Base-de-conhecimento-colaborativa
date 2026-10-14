@@ -10,10 +10,51 @@
   <div class="tabstrip__tabs" id="tabs" role="tablist" aria-label="Abas abertas"></div>
   <button type="button" class="tabstrip__add" id="tab-add" title="Nova aba" aria-label="Nova aba">+</button>
 </div>
+<form class="omnibar" id="omnibar" role="search" autocomplete="off">
+  <svg class="omnibar__icon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.414zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>
+  <input class="omnibar__input" id="omni-q" name="q" type="search"
+         placeholder="Pesquisar nesta aba…" aria-label="Pesquisar nesta aba">
+  <button class="btn btn-sm btn-primary" type="submit" data-mode="search" title="Busca por palavra-chave (Enter)">Buscar</button>
+  <button class="btn btn-sm btn-outline-secondary omnibar__ai" type="submit" data-mode="ask"
+          title="Conversar com a IA sobre a documentação (Ctrl+Enter)">✦ Perguntar à IA</button>
+  <span class="omnibar__hint">Alt+Enter abre em nova aba</span>
+  <button type="button" class="btn btn-sm btn-outline-secondary omnibar__notes" id="notes-toggle"
+          title="Bloco de notas (Alt+N): junte dados de várias abas" aria-pressed="false">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5 0h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2 2 2 0 0 1-2 2H3a2 2 0 0 1-2-2h1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1H1a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1H3a2 2 0 0 1 2-2M1 6v-.5a.5.5 0 0 1 1 0V6h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 3v-.5a.5.5 0 0 1 1 0V9h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 2.5v.5H.5a.5.5 0 0 0 0 1h2a.5.5 0 0 0 0-1H2v-.5a.5.5 0 0 0-1 0"/></svg>
+    Notas <span class="omnibar__count" id="notes-count" hidden></span>
+  </button>
+</form>
+<div class="workarea">
 <div class="tabframes" id="frames"
      data-home="{{ url_for('documents.index') }}"
      data-search="{{ url_for('documents.search') }}"
+     data-ask="{{ url_for('documents.ask') }}"
      data-shell="{{ url_for('documents.shell') }}"></div>
+
+<aside class="notes-panel" id="notes-panel" hidden aria-label="Bloco de notas"
+       data-api="{{ url_for('notes.list_notes') }}">
+  <div class="notes-head">
+    <select class="form-select form-select-sm" id="notes-select" aria-label="Nota"></select>
+    <button type="button" class="notes-icon" id="notes-new" title="Nova nota">+</button>
+    <button type="button" class="notes-icon" id="notes-rename" title="Renomear">✎</button>
+    <button type="button" class="notes-icon" id="notes-delete" title="Apagar esta nota">🗑</button>
+    <button type="button" class="notes-icon" id="notes-close" title="Fechar (Alt+N)">×</button>
+  </div>
+  <div class="notes-tools">
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="notes-copy">Copiar tudo</button>
+    <a class="btn btn-sm btn-outline-secondary" id="notes-export" href="#" download>Exportar .txt</a>
+    <span class="notes-saved" id="notes-saved"></span>
+  </div>
+  <div class="notes-scroll">
+    <div class="notes-label">Recortes <span id="notes-clip-count"></span></div>
+    <div class="notes-clips" id="notes-clips"></div>
+    <div class="notes-label">Anotações</div>
+    <textarea class="notes-body" id="notes-body"
+              placeholder="Cruze os dados aqui: compare, some, escreva a conclusão…"></textarea>
+  </div>
+</aside>
+</div>
 <script src="{{ url_for('static', filename='tabs.js') }}"></script>
+<script src="{{ url_for('static', filename='notes.js') }}"></script>
 {% endblock %}
 {% block footer %}{% endblock %}

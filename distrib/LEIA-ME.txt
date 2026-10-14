@@ -35,6 +35,22 @@ A janela usa o Microsoft Edge, que ja vem no Windows. Se por algum
 motivo a janela nao abrir, o programa abre no navegador padrao e
 mostra o endereco (http://127.0.0.1:5000).
 
+ACOMPANHAMENTO DE CHAMADOS
+--------------------------
+"AcompanhamentoChamados.exe" (nesta mesma pasta) e um programa a parte
+para acompanhar seus chamados e ser cobrado por eles:
+- cadastre numero, titulo, status, prioridade, prazo e o link do chamado;
+- ele avisa (janela por cima de tudo + som) quando um chamado esta sem
+  acompanhamento ha muito tempo, quando o prazo esta perto e quando estourou;
+- "Notificar cobranca a cada X" (no cadastro, ou no botao "Notificar a cada"):
+  escolha de quanto em quanto tempo ser lembrado de olhar o chamado
+  (ex.: a cada 30 min, 2 horas, 1 dia), use o padrao da prioridade ou desligue;
+- "Registrar acompanhamento" zera a cobranca; "Vi, lembrar em X" repete no
+  intervalo escolhido; "Adiar" silencia por um tempo;
+- tempos, horario de trabalho e "abrir junto com o Windows" ficam no botao
+  de engrenagem. Os alertas so funcionam com o programa aberto (pode minimizar).
+Os chamados ficam em "dados\chamados.sqlite" (entram no backup de "dados").
+
 OBSERVACOES
 -----------
 - E um programa local: nada sai do seu computador, nao usa internet.

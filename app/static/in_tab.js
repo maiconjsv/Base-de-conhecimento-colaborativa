@@ -60,4 +60,83 @@
   window.addEventListener('beforeunload', function () {
     try { tabs.loading(window); } catch (e) { /* moldura fechada */ }
   });
+
+  // ------------------------------------------------ "+ Notas" sobre texto selecionado
+  // Leva o trecho para o bloco de notas da moldura, com a fonte (titulo + endereco).
+  // Numa linha da pseudoplanilha, a fonte aponta a aba e a linha exatas.
+  var notes = null;
+  try { notes = window.top.kbNotes || null; } catch (e) { notes = null; }
+  if (!notes) return;
+
+  var clipBtn = document.createElement('button');
+  clipBtn.type = 'button';
+  clipBtn.className = 'kb-clip-btn';
+  clipBtn.textContent = '+ Notas';
+  clipBtn.title = 'Levar o texto selecionado para o bloco de notas (Alt+S)';
+  clipBtn.hidden = true;
+  document.body.appendChild(clipBtn);
+
+  function selectedText() {
+    var s = window.getSelection();
+    if (!s || s.isCollapsed) return '';
+    var el = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement);
+    if (el && el.closest('input, textarea, [contenteditable="true"]')) return '';
+    return s.toString().replace(/ /g, ' ').trim();
+  }
+
+  function source() {
+    var url = new URL(location.href);
+    var s = window.getSelection();
+    var node = s && s.anchorNode;
+    var el = node && (node.nodeType === 1 ? node : node.parentElement);
+    var row = el && el.closest('tr[id^="r"]');
+    if (row && /^r\d+$/.test(row.id)) {           // linha da pseudoplanilha
+      url.searchParams.set('row', row.id.slice(1));
+      url.hash = row.id;
+    }
+    var title = document.title.replace(/\s*·\s*Semantix\s*$/, '');
+    if (row) {
+      var tab = document.querySelector('.sheet-tab.is-active');
+      title += (tab ? ' › aba ' + tab.firstChild.textContent.trim() : '') + ' › linha ' + row.id.slice(1);
+    }
+    return { title: title, url: url.pathname + url.search + url.hash };
+  }
+
+  function send() {
+    var text = selectedText();
+    if (!text) return;
+    var src = source();
+    notes.addClip({ text: text, title: src.title, url: src.url });
+    clipBtn.hidden = true;
+    window.getSelection().removeAllRanges();
+  }
+
+  function place() {
+    var text = selectedText();
+    if (text.length < 2) { clipBtn.hidden = true; return; }
+    var range = window.getSelection().getRangeAt(0);
+    var rects = range.getClientRects();
+    var r = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
+    clipBtn.hidden = false;
+    var x = Math.min(window.innerWidth - clipBtn.offsetWidth - 8, Math.max(8, r.right - clipBtn.offsetWidth / 2));
+    var y = r.bottom + 8 + clipBtn.offsetHeight > window.innerHeight ? r.top - clipBtn.offsetHeight - 8 : r.bottom + 8;
+    clipBtn.style.left = x + 'px';
+    clipBtn.style.top = y + 'px';
+  }
+
+  document.addEventListener('mouseup', function (ev) {
+    if (ev.target === clipBtn) return;
+    setTimeout(place, 0);
+  });
+  document.addEventListener('keyup', function (ev) { if (ev.shiftKey) place(); });
+  document.addEventListener('mousedown', function (ev) { if (ev.target !== clipBtn) clipBtn.hidden = true; });
+  window.addEventListener('scroll', function () { clipBtn.hidden = true; }, true);
+  clipBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });   // nao perde a selecao
+  clipBtn.addEventListener('click', send);
+
+  document.addEventListener('keydown', function (ev) {
+    if (!ev.altKey) return;
+    if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); send(); }
+    if (ev.key === 'n' || ev.key === 'N') { ev.preventDefault(); notes.toggle(); }
+  });
 })();

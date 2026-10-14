@@ -1,15 +1,31 @@
-{# Linhas de planilha encontradas, agrupadas por aba, com a fonte de cada uma.
-   Renderizado por app/sheets.py:render_row_groups (busca e assistente). #}
-<div class="sheet-hits">
+{# Linhas de planilha encontradas, com uma aba de navegacao por aba da planilha.
+   Renderizado por app/sheets.py:render_row_groups (busca, Pesquisas e Perguntar).
+   A troca de aba e feita por static/sheet_hits.js (delegacao de clique), porque
+   este HTML chega por fetch/innerHTML. #}
+<div class="sheet-hits" data-sheet-hits>
+  <div class="sheet-hits__source">
+    <span class="sheet-hits__file">{{ doc.original_filename }}</span>
+    {% if groups|length > 1 %}
+      <span class="text-muted">· encontrado em {{ groups|length }} abas</span>
+    {% endif %}
+  </div>
+
+  {% if groups|length > 1 %}
+  <div class="sheet-hits__tabs" role="tablist" aria-label="Abas da planilha com resultados">
+    {% for g in groups %}
+      <button type="button" role="tab" class="sheet-hits__tab{{ ' is-active' if loop.index0 == active }}"
+              aria-selected="{{ 'true' if loop.index0 == active else 'false' }}" data-idx="{{ loop.index0 }}">
+        {{ g.sheet.name }} <span class="sheet-hits__n">{{ g.total }}</span>
+      </button>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% for g in groups %}
-  <div class="sheet-hits__group">
-    <div class="sheet-hits__source">
-      <span class="sheet-hits__file">{{ doc.original_filename }}</span>
-      <span class="sheet-hits__sep">›</span>
-      <span>aba <strong>{{ g.sheet.name }}</strong></span>
-      <span class="text-muted">· {{ g.total }} {{ 'linha' if g.total == 1 else 'linhas' }}
-        {%- if g.total > g.rows|length %}, mostrando {{ g.rows|length }}{% endif %}</span>
-    </div>
+  <div class="sheet-hits__panel" role="tabpanel" data-idx="{{ loop.index0 }}"{% if loop.index0 != active %} hidden{% endif %}>
+    {% if groups|length == 1 %}
+      <div class="sheet-hits__meta">aba <strong>{{ g.sheet.name }}</strong></div>
+    {% endif %}
     <div class="sheet-grid-wrap sheet-grid-wrap--mini">
       <table class="sheet-grid">
         <thead>
@@ -36,7 +52,15 @@
         </tbody>
       </table>
     </div>
+    <div class="sheet-hits__foot">
+      <span>
+        {% if g.total > g.rows|length %}{{ g.rows|length }} de {{ g.total }} linhas{% else %}{{ g.total }} {{ 'linha' if g.total == 1 else 'linhas' }}{% endif %}
+        · clique no número para abrir naquela linha
+      </span>
+      {% if filter_q %}
+        <a href="{{ g.open_url }}">Abrir esta aba na planilha, filtrada ›</a>
+      {% endif %}
+    </div>
   </div>
   {% endfor %}
-  <div class="sheet-hits__hint">Clique no número da linha para abrir a planilha naquele ponto.</div>
 </div>

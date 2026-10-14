@@ -18,6 +18,7 @@
   var frames = document.getElementById('frames');
   var HOME = frames.dataset.home;
   var SEARCH = frames.dataset.search;
+  var ASK = frames.dataset.ask;
   var SHELL = frames.dataset.shell;
   var STORE_KEY = 'kb.abas.v1';
   var MAX_TABS = 20;
@@ -151,6 +152,7 @@
     });
     var act = byId(state.active);
     document.title = (act && act.title ? act.title + ' · ' : '') + 'Base de Conhecimento · Semantix';
+    syncOmnibar(act);
   }
 
   function esc(s) {
@@ -173,17 +175,70 @@
   });
   document.getElementById('tab-add').addEventListener('click', function () { open(HOME); });
 
-  // menu do topo: busca abre aba nova; botoes navegam na aba atual
-  var navSearch = document.querySelector('.site-nav [data-newtab-form]');
-  if (navSearch) {
-    navSearch.addEventListener('submit', function (ev) {
-      ev.preventDefault();
-      var q = navSearch.q.value.trim();
-      if (!q) return;
-      open(SEARCH + '?q=' + encodeURIComponent(q), { title: q });
-      navSearch.q.value = '';
-    });
+  // barra abaixo das abas: pesquisa NA ABA ATIVA (Alt+Enter = aba nova), como a
+  // barra de endereco do navegador. Mostra a pesquisa da aba que estiver aberta.
+  var omni = document.getElementById('omnibar');
+  var omniQ = document.getElementById('omni-q');
+  var omniTyping = false;
+
+  function tabQuery(tab) {
+    if (!tab) return '';
+    try {
+      var u = new URL(tab.url, location.href);
+      return u.searchParams.get('q') || u.searchParams.get('f') || '';
+    } catch (e) { return ''; }
   }
+  function syncOmnibar(tab) {
+    if (!omniQ || omniTyping) return;
+    omniQ.value = tabQuery(tab);
+  }
+  function omniGo(mode, newTab) {
+    var q = omniQ.value.trim();
+    if (!q) { omniQ.focus(); return; }
+    omniTyping = false;
+    if (mode === 'ask') {
+      // aba que ja e o chat: continua a conversa ali, sem recarregar
+      var tab = byId(state.active), f = tab && frameOf(tab.id);
+      if (!newTab && f) {
+        try {
+          if (f.contentWindow.kbAsk && f.contentWindow.kbAsk(q)) return;
+        } catch (e) { /* segue navegando */ }
+      }
+      var url = ASK + '?q=' + encodeURIComponent(q);
+      if (newTab) open(url, { title: 'Perguntar' }); else navigate(url);
+      return;
+    }
+    var surl = SEARCH + '?q=' + encodeURIComponent(q);
+    if (newTab) open(surl, { title: q }); else navigate(surl);
+  }
+  if (omni) {
+    var omniMode = 'search';
+    omni.querySelectorAll('[data-mode]').forEach(function (b) {
+      b.addEventListener('click', function () { omniMode = b.dataset.mode; });
+    });
+    omni.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      omniGo(omniMode, false);
+      omniMode = 'search';
+    });
+    omniQ.addEventListener('input', function () { omniTyping = true; });
+    omniQ.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter') return;
+      if (ev.ctrlKey || ev.altKey) {
+        ev.preventDefault();
+        omniGo(ev.ctrlKey ? 'ask' : 'search', ev.altKey);
+      }
+    });
+    omniQ.addEventListener('blur', function () { omniTyping = false; });
+  }
+  // Ctrl+L / F6 levam para a barra, como no navegador
+  document.addEventListener('keydown', function (ev) {
+    if ((ev.ctrlKey && (ev.key === 'l' || ev.key === 'L')) || ev.key === 'F6') {
+      ev.preventDefault();
+      omniQ.focus();
+      omniQ.select();
+    }
+  });
   document.querySelectorAll('.site-nav a[href]').forEach(function (a) {
     var url = new URL(a.href, location.href);
     if (url.origin !== location.origin || /\/logout$/.test(url.pathname)) return;   // "Sair" sai de verdade

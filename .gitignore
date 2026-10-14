@@ -11,3 +11,6 @@ dist/
 *.sqlite3
 secret.key
 .DS_Store
+vendor/
+modelos/
+*.gguf

@@ -1,5 +1,8 @@
+import json
+
 from flask import (
     Blueprint,
+    Response,
     abort,
     current_app,
     flash,
@@ -8,11 +11,13 @@ from flask import (
     render_template,
     request,
     send_from_directory,
+    stream_with_context,
     url_for,
 )
 from flask_login import current_user, login_required
 
 from .. import ask as ask_mod
+from .. import llm
 from ..db import db
 from ..dedup import DuplicateDocument
 from ..locator import compile_terms, find_snippets
@@ -94,10 +99,11 @@ def search_hits(doc_id: int):
         rows = match_rows(doc.id, " OR ".join(f'"{t}"*' for t in tokens))
         row_count = len(rows)
         count += row_count
-        tables_html = render_row_groups(doc, rows, term_re)
+        tables_html = render_row_groups(doc, rows, term_re, filter_q=request.args.get("q", ""))
     if term_re is not None:
         for label, attr in _HIT_FIELDS:
-            if is_sheet and attr == "content":
+            # planilha: o resumo e as tags sao derivados das linhas, so repetiriam
+            if is_sheet and attr in ("content", "description", "tags"):
                 continue
             snippets, found = find_snippets(
                 getattr(doc, attr) or "", term_re, max_hits=_HITS_PER_FIELD
@@ -223,6 +229,81 @@ def ask_api():
     )
 
 
+def _chat_history(raw: str) -> list[dict]:
+    """Ultimas perguntas/respostas da conversa (enviadas pela pagina), saneadas."""
+    try:
+        items = json.loads(raw) if raw else []
+    except ValueError:
+        return []
+    out = []
+    for it in items[-llm.HISTORY_TURNS:] if isinstance(items, list) else []:
+        if isinstance(it, dict) and isinstance(it.get("q"), str) and isinstance(it.get("a"), str):
+            out.append({"q": it["q"][:500], "a": it["a"][: llm.HISTORY_ANSWER_CHARS]})
+    return out
+
+
+@bp.route("/perguntar/ia/status")
+@login_required
+def ask_ai_status():
+    """IA local disponivel? (motor + modelo presentes, memoria da maquina)."""
+    return jsonify(llm.engine.status())
+
+
+@bp.route("/perguntar/ia")
+@login_required
+def ask_ai():
+    """Resposta da IA local em streaming (NDJSON, uma linha JSON por evento).
+
+    Eventos: meta (resultado da busca: trechos, documentos), status (texto de
+    progresso), delta (pedaco da resposta), error, done. A busca roda antes do
+    streaming; a IA so recebe a pergunta e os trechos encontrados.
+    """
+    question = request.args.get("q", "", type=str).strip()[:500]
+    history = _chat_history(request.args.get("ctx", ""))
+    to_url = lambda doc_id: url_for("documents.detail", doc_id=doc_id)  # noqa: E731
+    short = len(ask_mod.extract_terms(question)) <= 2
+    if history and short:
+        # continuacao curta ("e o email?"): busca junto com a pergunta anterior,
+        # senao "email" traria a linha de todo mundo
+        result = ask_mod.answer(f"{history[-1]['q']} {question}", to_url)
+        result["query"] = question
+    else:
+        result = ask_mod.answer(question, to_url)
+        if not result["passages"] and history:
+            result = ask_mod.answer(f"{history[-1]['q']} {question}", to_url)
+            result["query"] = question
+    passages = result["passages"]
+    # o texto puro dos trechos so vai para a IA, nao para a pagina
+    meta = {**result, "passages": [{k: v for k, v in p.items() if k != "plain"} for p in passages]}
+    messages = llm.build_messages(question, passages, history) if passages else None
+
+    def line(obj) -> str:
+        return json.dumps(obj, ensure_ascii=False) + "\n"
+
+    def events():
+        yield line({"type": "meta", "result": meta})
+        if not messages:
+            yield line({"type": "done"})
+            return
+        try:
+            if not llm.engine.running:
+                yield line({"type": "status", "text": "Ligando a IA local… a primeira pergunta "
+                                                      "demora alguns segundos enquanto o modelo carrega."})
+                llm.engine.ensure_running()
+            yield line({"type": "status", "text": "Lendo os trechos e escrevendo a resposta…"})
+            for piece in llm.engine.stream_chat(messages):
+                yield line({"type": "delta", "text": piece})
+            yield line({"type": "done"})
+        except llm.LLMError as exc:
+            yield line({"type": "error", "text": str(exc)})
+
+    return Response(
+        stream_with_context(events()),
+        mimetype="application/x-ndjson",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
+
+
 def _skipped_message(skipped) -> str:
     """Aviso dos envios ignorados por ja existirem na base."""
     parts = []
@@ -276,6 +357,16 @@ def upload():
             )
             return render_template("upload.html", **_upload_context(form)), 422
 
+        csvs = [d for d in docs if d.original_filename.lower().endswith(".csv")]
+        if csvs:
+            # CSV exportado do Excel leva so a aba que estava aberta
+            flash(
+                ("“" + csvs[0].original_filename + "” é CSV" if len(csvs) == 1
+                 else f"{len(csvs)} arquivos são CSV")
+                + ": esse formato guarda só uma aba. Se a planilha original tem várias "
+                "abas, envie o arquivo do Excel (.xlsx) para todas entrarem na busca.",
+                "info",
+            )
         without_text = [d for d in docs if not d.extraction_ok]
         if failed:
             flash("Falha ao processar: " + ", ".join(failed), "warning")
